@@ -358,25 +358,15 @@
 						</div>
 
 						<div class="mt-2 mb-1 text-xs text-gray-400 dark:text-gray-500">
-							{$i18n.t(`WorldSeek uses faster-whisper internally.`)}
-
-							<a
-								class=" hover:underline dark:text-gray-200 text-gray-800"
-								href="https://github.com/SYSTRAN/faster-whisper"
-								target="_blank"
-							>
-								{$i18n.t(
-									`Click here to learn more about faster-whisper and see the available models.`
-								)}
-							</a>
+							{$i18n.t(`WorldSeek Studio uses a built-in speech recognition model.`)}
 						</div>
 					</div>
 				{/if}
 			</div>
 
-			<hr class="border-gray-100 dark:border-gray-850" />
+			<!-- <hr class="border-gray-100 dark:border-gray-850" /> -->
 
-			<div>
+			<!-- <div>
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('TTS Settings')}</div>
 
 				<div class=" py-0.5 flex w-full justify-between">
@@ -666,7 +656,7 @@
 						"Control how message text is split for TTS requests. 'Punctuation' splits into sentences, 'paragraphs' splits into paragraphs, and 'none' keeps the message as a single string."
 					)}
 				</div>
-			</div>
+			</div> -->
 		</div>
 	</div>
 	<div class="flex justify-end text-sm font-medium">

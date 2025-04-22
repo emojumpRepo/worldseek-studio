@@ -813,7 +813,7 @@
 	"Open in full screen": "",
 	"Open new chat": "",
 	"WorldSeek can use tools provided by any OpenAPI server.": "",
-	"WorldSeek uses faster-whisper internally.": "",
+	"WorldSeek Studio uses a built-in speech recognition model.": "",
 	"WorldSeek uses SpeechT5 and CMU Arctic speaker embeddings.": "",
 	"WorldSeek version (v{{WORLD_SEEK_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})": "",
 	"OpenAI": "",
