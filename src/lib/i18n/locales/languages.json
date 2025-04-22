@@ -1,5 +1,9 @@
 [
 	{
+		"code": "en-US",
+		"title": "English (US)"
+	},
+	{
 		"code": "zh-CN",
 		"title": "Chinese (简体中文)"
 	}

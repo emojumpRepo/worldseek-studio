@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getVersionUpdates } from '$lib/apis';
 	import { getOllamaVersion } from '$lib/apis/ollama';
-	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
+	import { WS_BUILD_HASH, WS_VERSION } from '$lib/constants';
 	import { WEBUI_NAME, config, showChangelog } from '$lib/stores';
 	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
@@ -22,8 +22,8 @@
 		updateAvailable = null;
 		version = await getVersionUpdates(localStorage.token).catch((error) => {
 			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
+				current: WS_VERSION,
+				latest: WS_VERSION
 			};
 		});
 
@@ -54,15 +54,9 @@
 			<div class="flex w-full justify-between items-center">
 				<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
 					<div class="flex gap-1">
-						<Tooltip content={WEBUI_BUILD_HASH}>
-							v{WEBUI_VERSION}
+						<Tooltip content={WS_BUILD_HASH}>
+							v{WS_VERSION}
 						</Tooltip>
-
-						{updateAvailable === null
-							? $i18n.t('Checking for updates...')
-							: updateAvailable
-								? `(v${version.latest} ${$i18n.t('available!')})`
-								: $i18n.t('(latest)')}
 					</div>
 
 					<button
@@ -103,29 +97,12 @@
 
 		{#if $config?.license_metadata}
 			<div class="mb-2 text-xs">
-				{#if !$WEBUI_NAME.includes('Open WebUI')}
+				{#if !$WEBUI_NAME.includes('WorldSeek')}
 					<span class=" text-gray-500 dark:text-gray-300 font-medium">{$WEBUI_NAME}</span> -
 				{/if}
 
 				<span class=" capitalize">{$config?.license_metadata?.type}</span> license purchased by
 				<span class=" capitalize">{$config?.license_metadata?.organization_name}</span>
-			</div>
-		{:else}
-			<div class="flex space-x-1">
-				<img
-					alt="Discord"
-					src="https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white"
-				/>
-
-				<img
-					alt="X (formerly Twitter) Follow"
-					src="https://img.shields.io/twitter/follow/OpenWebUI"
-				/>
-
-				<img
-					alt="Github Repo"
-					src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-				/>
 			</div>
 		{/if}
 
@@ -134,8 +111,7 @@
 		</div>
 
 		<div>
-			<pre
-				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()} Open WebUI (Timothy Jaeryang Baek)
+			<pre class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()}
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

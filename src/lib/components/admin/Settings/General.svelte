@@ -13,7 +13,7 @@
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
+	import { WS_BUILD_HASH, WS_VERSION } from '$lib/constants';
 	import { config, showChangelog } from '$lib/stores';
 	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
@@ -53,8 +53,8 @@
 		updateAvailable = null;
 		version = await getVersionUpdates(localStorage.token).catch((error) => {
 			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
+				current: WS_VERSION,
+				latest: WS_VERSION
 			};
 		});
 
@@ -117,7 +117,7 @@
 	<div class="mt-0.5 space-y-3 overflow-y-scroll scrollbar-hidden h-full">
 		{#if adminConfig !== null}
 			<div class="">
-				<div class="mb-3.5">
+				<!-- <div class="mb-3.5">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
 					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
@@ -131,20 +131,9 @@
 						<div class="flex w-full justify-between items-center">
 							<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
 								<div class="flex gap-1">
-									<Tooltip content={WEBUI_BUILD_HASH}>
-										v{WEBUI_VERSION}
+									<Tooltip content={WS_BUILD_HASH}>
+										v{WS_VERSION}
 									</Tooltip>
-
-									<a
-										href="https://github.com/open-webui/open-webui/releases/tag/v{version.latest}"
-										target="_blank"
-									>
-										{updateAvailable === null
-											? $i18n.t('Checking for updates...')
-											: updateAvailable
-												? `(v${version.latest} ${$i18n.t('available!')})`
-												: $i18n.t('(latest)')}
-									</a>
 								</div>
 
 								<button
@@ -177,101 +166,21 @@
 									{$i18n.t('Help')}
 								</div>
 								<div class=" text-xs text-gray-500">
-									{$i18n.t('Discover how to use Open WebUI and seek support from the community.')}
+									{$i18n.t('Discover how to use WorldSeek and seek support from the community.')}
 								</div>
 							</div>
 
 							<a
 								class="flex-shrink-0 text-xs font-medium underline"
-								href="https://docs.openwebui.com/"
 								target="_blank"
 							>
 								{$i18n.t('Documentation')}
 							</a>
 						</div>
-
-						<div class="mt-1">
-							<div class="flex space-x-1">
-								<a href="https://discord.gg/5rJgQTnV4s" target="_blank">
-									<img
-										alt="Discord"
-										src="https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white"
-									/>
-								</a>
-
-								<a href="https://twitter.com/OpenWebUI" target="_blank">
-									<img
-										alt="X (formerly Twitter) Follow"
-										src="https://img.shields.io/twitter/follow/OpenWebUI"
-									/>
-								</a>
-
-								<a href="https://github.com/open-webui/open-webui" target="_blank">
-									<img
-										alt="Github Repo"
-										src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-									/>
-								</a>
-							</div>
-						</div>
 					</div>
+				</div> -->
 
-					<div class="mb-2.5">
-						<div class="flex w-full justify-between items-center">
-							<div class="text-xs pr-2">
-								<div class="">
-									{$i18n.t('License')}
-								</div>
-
-								{#if $config?.license_metadata}
-									<a
-										href="https://docs.openwebui.com/enterprise"
-										target="_blank"
-										class="text-gray-500 mt-0.5"
-									>
-										<span class=" capitalize text-black dark:text-white"
-											>{$config?.license_metadata?.type}
-											license</span
-										>
-										registered to
-										<span class=" capitalize text-black dark:text-white"
-											>{$config?.license_metadata?.organization_name}</span
-										>
-										for
-										<span class=" font-medium text-black dark:text-white"
-											>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
-										>
-									</a>
-									{#if $config?.license_metadata?.html}
-										<div class="mt-0.5">
-											{@html DOMPurify.sanitize($config?.license_metadata?.html)}
-										</div>
-									{/if}
-								{:else}
-									<a
-										class=" text-xs hover:underline"
-										href="https://docs.openwebui.com/enterprise"
-										target="_blank"
-									>
-										<span class="text-gray-500">
-											{$i18n.t(
-												'Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.'
-											)}
-										</span>
-									</a>
-								{/if}
-							</div>
-
-							<!-- <button
-								class="flex-shrink-0 text-xs px-3 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-lg font-medium"
-							>
-								{$i18n.t('Activate')}
-							</button> -->
-						</div>
-					</div>
-				</div>
-
-				<div class="mb-3">
+				<div class="mb-3.5">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Authentication')}</div>
 
 					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
@@ -332,17 +241,6 @@
 									placeholder={`e.g.) /api/v1/messages, /api/v1/channels`}
 									bind:value={adminConfig.API_KEY_ALLOWED_ENDPOINTS}
 								/>
-
-								<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-									<!-- https://docs.openwebui.com/getting-started/advanced-topics/api-endpoints -->
-									<a
-										href="https://docs.openwebui.com/getting-started/api-endpoints"
-										target="_blank"
-										class=" text-gray-300 font-medium underline"
-									>
-										{$i18n.t('To learn more about available endpoints, visit our documentation.')}
-									</a>
-								</div>
 							</div>
 						{/if}
 					{/if}
@@ -369,7 +267,7 @@
 						</div>
 					</div>
 
-					<div class=" space-y-3">
+					<!-- <div class=" space-y-3">
 						<div class="mt-2 space-y-2 pr-1.5">
 							<div class="flex justify-between items-center text-sm">
 								<div class="  font-medium">{$i18n.t('LDAP')}</div>
@@ -579,10 +477,10 @@
 								</div>
 							{/if}
 						</div>
-					</div>
+					</div> -->
 				</div>
 
-				<div class="mb-3">
+				<!-- <div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Features')}</div>
 
 					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
@@ -652,7 +550,7 @@
 							/>
 						</div>
 					</div>
-				</div>
+				</div> -->
 			</div>
 		{/if}
 	</div>

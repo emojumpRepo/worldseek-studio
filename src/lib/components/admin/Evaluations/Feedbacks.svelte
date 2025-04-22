@@ -64,33 +64,6 @@
 		}
 	};
 
-	const shareHandler = async () => {
-		toast.success($i18n.t('Redirecting you to Open WebUI Community'));
-
-		// remove snapshot from feedbacks
-		const feedbacksToShare = feedbacks.map((f) => {
-			const { snapshot, user, ...rest } = f;
-			return rest;
-		});
-		console.log(feedbacksToShare);
-
-		const url = 'https://openwebui.com';
-		const tab = await window.open(`${url}/leaderboard`, '_blank');
-
-		// Define the event handler function
-		const messageHandler = (event) => {
-			if (event.origin !== url) return;
-			if (event.data === 'loaded') {
-				tab.postMessage(JSON.stringify(feedbacksToShare), '*');
-
-				// Remove the event listener after handling the message
-				window.removeEventListener('message', messageHandler);
-			}
-		};
-
-		window.addEventListener('message', messageHandler, false);
-	};
-
 	const exportHandler = async () => {
 		const _feedbacks = await exportAllFeedbacks(localStorage.token).catch((err) => {
 			toast.error(err);
@@ -263,12 +236,9 @@
 			>
 				<button
 					class="flex text-xs items-center px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition"
-					on:click={async () => {
-						shareHandler();
-					}}
 				>
 					<div class=" self-center mr-2 font-medium line-clamp-1">
-						{$i18n.t('Share to Open WebUI Community')}
+						{$i18n.t('Share to WorldSeek Community')}
 					</div>
 
 					<div class=" self-center">

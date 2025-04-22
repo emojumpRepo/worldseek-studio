@@ -263,18 +263,6 @@
 				<div class=" self-center text-xs font-medium">{$i18n.t('Language')}</div>
 				<div class="text-xs">{languages.find(l => l.code === 'zh-CN')?.title}</div>
 			</div>
-			{#if $i18n.language === 'en-US'}
-				<div class="mb-2 text-xs text-gray-400 dark:text-gray-500">
-					Couldn't find your language?
-					<a
-						class=" text-gray-300 font-medium underline"
-						href="https://github.com/open-webui/open-webui/blob/main/docs/CONTRIBUTING.md#-translations-and-internationalization"
-						target="_blank"
-					>
-						Help us translate Open WebUI!
-					</a>
-				</div>
-			{/if}
 
 			<div>
 				<div class=" py-0.5 flex w-full justify-between">
