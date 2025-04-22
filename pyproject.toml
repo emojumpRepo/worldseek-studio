@@ -1,6 +1,6 @@
 [project]
-name = "open-webui"
-description = "Open WebUI"
+name = "worldseek"
+description = "WorldSeek"
 authors = [
     { name = "Timothy Jaeryang Baek", email = "tim@openwebui.com" }
 ]
@@ -145,7 +145,7 @@ classifiers = [
 ]
 
 [project.scripts]
-open-webui = "open_webui:app"
+world-seek = "world_seek:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -177,7 +177,7 @@ exclude = [
     "webui.db",
     "chroma.sqlite3",
 ]
-force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md", build = "open_webui/frontend" }
+force-include = { "CHANGELOG.md" = "world_seek/CHANGELOG.md", build = "world_seek/frontend" }
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
