@@ -58,16 +58,11 @@
 							v{WEBUI_VERSION}
 						</Tooltip>
 
-						<a
-							href="https://github.com/open-webui/open-webui/releases/tag/v{version.latest}"
-							target="_blank"
-						>
-							{updateAvailable === null
-								? $i18n.t('Checking for updates...')
-								: updateAvailable
-									? `(v${version.latest} ${$i18n.t('available!')})`
-									: $i18n.t('(latest)')}
-						</a>
+						{updateAvailable === null
+							? $i18n.t('Checking for updates...')
+							: updateAvailable
+								? `(v${version.latest} ${$i18n.t('available!')})`
+								: $i18n.t('(latest)')}
 					</div>
 
 					<button
@@ -117,42 +112,30 @@
 			</div>
 		{:else}
 			<div class="flex space-x-1">
-				<a href="https://discord.gg/5rJgQTnV4s" target="_blank">
-					<img
-						alt="Discord"
-						src="https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white"
-					/>
-				</a>
+				<img
+					alt="Discord"
+					src="https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white"
+				/>
 
-				<a href="https://twitter.com/OpenWebUI" target="_blank">
-					<img
-						alt="X (formerly Twitter) Follow"
-						src="https://img.shields.io/twitter/follow/OpenWebUI"
-					/>
-				</a>
+				<img
+					alt="X (formerly Twitter) Follow"
+					src="https://img.shields.io/twitter/follow/OpenWebUI"
+				/>
 
-				<a href="https://github.com/open-webui/open-webui" target="_blank">
-					<img
-						alt="Github Repo"
-						src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-					/>
-				</a>
+				<img
+					alt="Github Repo"
+					src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
+				/>
 			</div>
 		{/if}
 
 		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-			Emoji graphics provided by
-			<a href="https://github.com/jdecked/twemoji" target="_blank">Twemoji</a>, licensed under
-			<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC-BY 4.0</a>.
+			Emoji graphics provided by Twemoji, licensed under CC-BY 4.0
 		</div>
 
 		<div>
 			<pre
-				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()} <a
-					href="https://openwebui.com"
-					target="_blank"
-					class="underline">Open WebUI (Timothy Jaeryang Baek)</a
-				>
+				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()} Open WebUI (Timothy Jaeryang Baek)
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -184,11 +167,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
 			{$i18n.t('Created by')}
-			<a
-				class=" text-gray-500 dark:text-gray-300 font-medium"
-				href="https://github.com/tjbck"
-				target="_blank">Timothy J. Baek</a
-			>
+			Timothy J. Baek
 		</div>
 	</div>
 </div>
