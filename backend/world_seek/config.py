@@ -114,46 +114,46 @@ DEFAULT_CONFIG = {
         "prompt_suggestions": [
             {
                 "title": [
-                    "Help me study",
-                    "vocabulary for a college entrance exam",
+                    "帮助我学习",
+                    "高考词汇",
                 ],
-                "content": "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the correct option.",
+                "content": "帮助我学习高考词汇：为我写一个句子，让我填写空白，并尝试选择正确的选项。",
             },
             {
                 "title": [
-                    "Give me ideas",
-                    "for what to do with my kids' art",
+                    "给我一些想法",
+                    "关于如何处理孩子的艺术作品",
                 ],
-                "content": "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's also so much clutter.",
+                "content": "我该如何处理孩子的艺术作品？我不能扔掉它们，但它们也太多了。",
             },
             {
-                "title": ["Tell me a fun fact", "about the Roman Empire"],
-                "content": "Tell me a random fun fact about the Roman Empire",
+                "title": ["告诉我一个有趣的事实", "关于罗马帝国"],
+                "content": "告诉我一个关于罗马帝国有趣的事实。",
             },
             {
                 "title": [
-                    "Show me a code snippet",
-                    "of a website's sticky header",
+                    "给我一个代码片段",
+                    "一个网站的粘性标题",
                 ],
-                "content": "Show me a code snippet of a website's sticky header in CSS and JavaScript.",
+                "content": "给我一个网站粘性标题的代码片段。",
             },
             {
                 "title": [
-                    "Explain options trading",
-                    "if I'm familiar with buying and selling stocks",
+                    "解释期权交易",
+                    "如果我熟悉股票的买卖",
                 ],
-                "content": "Explain options trading in simple terms if I'm familiar with buying and selling stocks.",
+                "content": "解释期权交易，如果我熟悉股票的买卖。",
             },
             {
-                "title": ["Overcome procrastination", "give me tips"],
-                "content": "Could you start by asking me about instances when I procrastinate the most and then give me some suggestions to overcome it?",
+                "title": ["克服拖延症", "给我一些建议"],
+                "content": "你能先问我什么时候拖延最严重，然后给我一些建议克服它吗？",
             },
             {
                 "title": [
-                    "Grammar check",
-                    "rewrite it for better readability ",
+                    "语法检查",
+                    "重写它以提高可读性",
                 ],
-                "content": 'Check the following sentence for grammar and clarity: "[sentence]". Rewrite it for better readability while maintaining its original meaning.',
+                "content": '检查以下句子是否有语法错误，并重写它以提高可读性，同时保持其原始含义。',
             },
         ],
     },
@@ -957,31 +957,31 @@ DEFAULT_PROMPT_SUGGESTIONS = PersistentConfig(
     "ui.prompt_suggestions",
     [
         {
-            "title": ["Help me study", "vocabulary for a college entrance exam"],
-            "content": "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the correct option.",
+            "title": ["帮助我学习", "高考词汇"],
+            "content": "帮助我学习高考词汇：为我写一个句子，让我填写空白，并尝试选择正确的选项。",
         },
         {
-            "title": ["Give me ideas", "for what to do with my kids' art"],
-            "content": "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's also so much clutter.",
+            "title": ["给我一些想法", "关于如何处理孩子的艺术作品"],
+            "content": "我该如何处理孩子的艺术作品？我不能扔掉它们，但它们也太多了。",
         },
         {
-            "title": ["Tell me a fun fact", "about the Roman Empire"],
-            "content": "Tell me a random fun fact about the Roman Empire",
+            "title": ["告诉我一个有趣的事实", "关于罗马帝国"],
+            "content": "告诉我一个关于罗马帝国有趣的事实。",
         },
         {
-            "title": ["Show me a code snippet", "of a website's sticky header"],
-            "content": "Show me a code snippet of a website's sticky header in CSS and JavaScript.",
+            "title": ["给我一个代码片段", "一个网站的粘性标题"],
+            "content": "给我一个网站粘性标题的代码片段。",
         },
         {
             "title": [
-                "Explain options trading",
-                "if I'm familiar with buying and selling stocks",
+                "解释期权交易",
+                "如果我熟悉股票的买卖",
             ],
-            "content": "Explain options trading in simple terms if I'm familiar with buying and selling stocks.",
+            "content": "解释期权交易，如果我熟悉股票的买卖。",
         },
         {
-            "title": ["Overcome procrastination", "give me tips"],
-            "content": "Could you start by asking me about instances when I procrastinate the most and then give me some suggestions to overcome it?",
+            "title": ["克服拖延症", "给我一些建议"],
+            "content": "你能先问我什么时候拖延最严重，然后给我一些建议克服它吗？",
         },
     ],
 )
@@ -1170,7 +1170,7 @@ DEFAULT_ARENA_MODEL = {
     "name": "Arena Model",
     "meta": {
         "profile_image_url": "/favicon.png",
-        "description": "Submit your questions to anonymous AI chatbots and vote on the best response.",
+        "description": "把你的问题提交给匿名的人工智能聊天机器人，并投票选出最佳回答。",
         "model_ids": None,
     },
 }

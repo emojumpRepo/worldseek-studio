@@ -107,14 +107,11 @@
 		{/if}
 
 		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-			Emoji graphics provided by
-			<a href="https://github.com/jdecked/twemoji" target="_blank">Twemoji</a>, licensed under
-			<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC-BY 4.0</a>.
+			Emoji graphics provided by Twemoji, licensed under CC-BY 4.0
 		</div>
 
 		<div>
-			<pre
-				class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()}
+			<pre class="text-xs text-gray-400 dark:text-gray-500">Copyright (c) {new Date().getFullYear()}
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -146,11 +143,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
 			{$i18n.t('Created by')}
-			<a
-				class=" text-gray-500 dark:text-gray-300 font-medium"
-				href="https://github.com/tjbck"
-				target="_blank">Timothy J. Baek</a
-			>
+			Timothy J. Baek
 		</div>
 	</div>
 </div>

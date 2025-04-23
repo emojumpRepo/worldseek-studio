@@ -19,7 +19,7 @@
 	let selectedTheme = 'system';
 
 	let languages: Awaited<ReturnType<typeof getLanguages>> = [];
-	let lang = $i18n.language;
+	let lang = 'zh-CN';
 	let notificationEnabled = false;
 	let system = '';
 
@@ -145,6 +145,8 @@
 		selectedTheme = localStorage.theme ?? 'system';
 
 		languages = await getLanguages();
+		lang = 'zh-CN';
+		changeLanguage('zh-CN');
 
 		notificationEnabled = $settings.notificationEnabled ?? false;
 		system = $settings.system ?? '';
@@ -259,20 +261,7 @@
 
 			<div class=" flex w-full justify-between">
 				<div class=" self-center text-xs font-medium">{$i18n.t('Language')}</div>
-				<div class="flex items-center relative">
-					<select
-						class=" dark:bg-gray-900 w-fit pr-8 rounded-sm py-2 px-2 text-xs bg-transparent outline-hidden text-right"
-						bind:value={lang}
-						placeholder="Select a language"
-						on:change={(e) => {
-							changeLanguage(lang);
-						}}
-					>
-						{#each languages as language}
-							<option value={language['code']}>{language['title']}</option>
-						{/each}
-					</select>
-				</div>
+				<div class="text-xs">{languages.find(l => l.code === 'zh-CN')?.title}</div>
 			</div>
 
 			<div>
@@ -296,7 +285,7 @@
 			</div>
 		</div>
 
-		{#if $user?.role === 'admin' || $user?.permissions.chat?.controls}
+		{#if $user?.role === 'admin'}
 			<hr class="border-gray-50 dark:border-gray-850 my-3" />
 
 			<div>
