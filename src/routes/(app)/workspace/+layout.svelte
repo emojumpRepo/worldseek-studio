@@ -13,6 +13,7 @@
 	} from '$lib/stores';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import Plus from '../../../lib/components/icons/Plus.svelte';
 
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 
@@ -55,8 +56,8 @@
 			? 'md:max-w-[calc(100%-260px)]'
 			: ''} max-w-full"
 	>
-		<nav class="   px-2.5 pt-1 backdrop-blur-xl drag-region">
-			<div class=" flex items-center gap-1">
+		<nav class="pl-2.5 pr-4.5 pt-1 backdrop-blur-xl drag-region">
+			<div class="flex items-center gap-1">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
 						id="sidebar-toggle-button"
@@ -72,7 +73,7 @@
 					</button>
 				</div>
 
-				<div class="">
+				<div class="flex-1 flex justify-between items-center">
 					<div
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
 					>
@@ -121,6 +122,13 @@
 								{$i18n.t('Tools')}
 							</a>
 						{/if} -->
+					</div>
+
+					<div
+						class="flex justify-center items-center gap-1 border border-solid border-black py-1 px-2 rounded-md text-sm cursor-pointer hover:bg-gray-100 transition"
+					>
+						<Plus className="size-3" />
+						<span>新建</span>
 					</div>
 				</div>
 
