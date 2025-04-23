@@ -39,5 +39,10 @@ export default defineConfig({
 	},
 	worker: {
 		format: 'es'
+	},
+	server: {
+		watch: {
+			ignored: ['**/backend/data/**', '**/backend/data/webui.db']
+		}
 	}
 });
