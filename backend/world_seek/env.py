@@ -79,6 +79,7 @@ if "cuda_error" in locals():
     del cuda_error
 
 log_sources = [
+    "AGENTS",
     "AUDIO",
     "COMFYUI",
     "CONFIG",

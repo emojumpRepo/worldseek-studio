@@ -53,6 +53,7 @@ from world_seek.socket.main import (
     periodic_usage_pool_cleanup,
 )
 from world_seek.routers import (
+    agents,
     audio,
     images,
     ollama,
@@ -944,6 +945,7 @@ app.include_router(pipelines.router, prefix="/api/v1/pipelines", tags=["pipeline
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
 
+app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 app.include_router(retrieval.router, prefix="/api/v1/retrieval", tags=["retrieval"])
 
@@ -1063,6 +1065,21 @@ async def get_models(request: Request, user=Depends(get_verified_user)):
 async def get_base_models(request: Request, user=Depends(get_admin_user)):
     models = await get_all_base_models(request, user=user)
     return {"data": models}
+
+
+@app.get("/api/agents")
+async def get_agents(request: Request, user=Depends(get_verified_user)):
+    from world_seek.routers.agents import get_agents as router_get_agents
+    print(f"main_get_agents: {user}")
+    agents = await router_get_agents(user=user)
+    return {"data": agents}
+
+
+@app.get("/api/agents/base")
+async def get_base_agents(request: Request, user=Depends(get_admin_user)):
+    from world_seek.routers.agents import get_base_agents as router_get_base_agents
+    agents = await router_get_base_agents(user=user)
+    return {"data": agents}
 
 
 @app.post("/api/chat/completions")

@@ -11,7 +11,7 @@ export const getModels = async (
 	base: boolean = false
 ) => {
 	let error = null;
-	const res = await fetch(`${WEBUI_BASE_URL}/api/models${base ? '/base' : ''}`, {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/agents${base ? '/base' : ''}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
