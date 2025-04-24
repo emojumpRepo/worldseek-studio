@@ -1,14 +1,8 @@
 <script lang="ts">
-	import { marked } from 'marked';
-
+    import ModelSettingDialog from './Models/ModelSettingDialog.svelte';
 	import { toast } from 'svelte-sonner';
-	import Sortable from 'sortablejs';
-
-	import fileSaver from 'file-saver';
-	const { saveAs } = fileSaver;
 
 	import { onMount, getContext, tick } from 'svelte';
-	import { goto } from '$app/navigation';
 	const i18n = getContext('i18n');
 
 	import { WEBUI_NAME, config, mobile, models as _models, settings, user } from '$lib/stores';
@@ -22,31 +16,23 @@
 
 	import { getModels } from '$lib/apis';
 	import { getGroups } from '$lib/apis/groups';
-
-	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
-	import ModelMenu from './Models/ModelMenu.svelte';
-	import ModelDeleteConfirmDialog from '../common/ConfirmDialog.svelte';
-	import Tooltip from '../common/Tooltip.svelte';
-	import GarbageBin from '../icons/GarbageBin.svelte';
-	import Search from '../icons/Search.svelte';
-	import Plus from '../icons/Plus.svelte';
-	import ChevronRight from '../icons/ChevronRight.svelte';
-	import Switch from '../common/Switch.svelte';
 	import Spinner from '../common/Spinner.svelte';
-	import { capitalizeFirstLetter } from '$lib/utils';
 
 	let shiftKey = false;
-
-	let importFiles;
-	let modelsImportInputElement: HTMLInputElement;
 	let loaded = false;
+
+    let selectedAgent = {
+        name: '',
+        description: '',
+        params: {},
+        access_control: {},
+    }
 
 	let models = [];
 
 	let filteredModels = [];
-	let selectedModel = null;
 
-	let showModelDeleteConfirm = false;
+	let showModelSettingDialog = true;
 
 	let group_ids = [];
 
@@ -54,6 +40,7 @@
 		filteredModels = models.filter(
 			(m) => searchValue === '' || m.name.toLowerCase().includes(searchValue.toLowerCase())
 		);
+		console.log('filteredModels', filteredModels);
 	}
 
 	let searchValue = '';
@@ -77,72 +64,9 @@
 		models = await getWorkspaceModels(localStorage.token);
 	};
 
-	const cloneModelHandler = async (model) => {
-		sessionStorage.model = JSON.stringify({
-			...model,
-			id: `${model.id}-clone`,
-			name: `${model.name} (Clone)`
-		});
-		goto('/workspace/models/create');
-	};
-
-	const hideModelHandler = async (model) => {
-		let info = model.info;
-
-		if (!info) {
-			info = {
-				id: model.id,
-				name: model.name,
-				meta: {
-					suggestion_prompts: null
-				},
-				params: {}
-			};
-		}
-
-		info.meta = {
-			...info.meta,
-			hidden: !(info?.meta?.hidden ?? false)
-		};
-
-		console.log(info);
-
-		const res = await updateModelById(localStorage.token, info.id, info);
-
-		if (res) {
-			toast.success(
-				$i18n.t(`Model {{name}} is now {{status}}`, {
-					name: info.id,
-					status: info.meta.hidden ? 'hidden' : 'visible'
-				})
-			);
-		}
-
-		await _models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
-		);
-		models = await getWorkspaceModels(localStorage.token);
-	};
-
-	const downloadModels = async (models) => {
-		let blob = new Blob([JSON.stringify(models)], {
-			type: 'application/json'
-		});
-		saveAs(blob, `models-export-${Date.now()}.json`);
-	};
-
-	const exportModelHandler = async (model) => {
-		let blob = new Blob([JSON.stringify([model])], {
-			type: 'application/json'
-		});
-		saveAs(blob, `${model.id}-${Date.now()}.json`);
-	};
-
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
+		console.log('models', models);
 		let groups = await getGroups(localStorage.token);
 		group_ids = groups.map((group) => group.id);
 
@@ -183,163 +107,37 @@
 </svelte:head>
 
 {#if loaded}
-	<ModelDeleteConfirmDialog
-		bind:show={showModelDeleteConfirm}
-		on:confirm={() => {
-			deleteModelHandler(selectedModel);
-		}}
+	<ModelSettingDialog
+		bind:show={showModelSettingDialog}
+        bind:agent={selectedAgent}
 	/>
 
-	<div class=" my-2 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
-		{#each filteredModels as model}
-			<div
-				class=" flex flex-col cursor-pointer w-full px-3 py-2 dark:hover:bg-white/5 hover:bg-black/5 rounded-xl transition"
-				id="model-item-{model.id}"
-			>
-				<div class="flex gap-4 mt-0.5 mb-0.5">
-					<div class=" w-[44px]">
-						<div
-							class=" rounded-full object-cover {model.is_active
-								? ''
-								: 'opacity-50 dark:opacity-50'} "
-						>
-							<img
-								src={model?.meta?.profile_image_url ?? '/static/favicon.png'}
-								alt="modelfile profile"
-								class=" rounded-full w-full h-auto object-cover"
-							/>
-						</div>
-					</div>
-
-					<a
-						class=" flex flex-1 cursor-pointer w-full"
-						href={`/?models=${encodeURIComponent(model.id)}`}
-					>
-						<div class=" flex-1 self-center {model.is_active ? '' : 'text-gray-500'}">
-							<Tooltip
-								content={marked.parse(model?.meta?.description ?? model.id)}
-								className=" w-fit"
-								placement="top-start"
-							>
-								<div class=" font-semibold line-clamp-1">{model.name}</div>
-							</Tooltip>
-
-							<div class="flex gap-1 text-xs overflow-hidden">
-								<div class="line-clamp-1">
-									{#if (model?.meta?.description ?? '').trim()}
-										{model?.meta?.description}
-									{:else}
-										{model.id}
-									{/if}
-								</div>
-							</div>
-						</div>
-					</a>
-				</div>
-
-				<div class="flex justify-between items-center -mb-0.5 px-0.5">
-					<div class=" text-xs mt-0.5">
-						<Tooltip
-							content={model?.user?.email ?? $i18n.t('Deleted User')}
-							className="flex shrink-0"
-							placement="top-start"
-						>
-							<div class="shrink-0 text-gray-500">
-								{$i18n.t('By {{name}}', {
-									name: capitalizeFirstLetter(
-										model?.user?.name ?? model?.user?.email ?? $i18n.t('Deleted User')
-									)
-								})}
-							</div>
-						</Tooltip>
-					</div>
-
-					<div class="flex flex-row gap-0.5 items-center">
-						{#if shiftKey}
-							<Tooltip content={$i18n.t('Delete')}>
-								<button
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
-									on:click={() => {
-										deleteModelHandler(model);
-									}}
-								>
-									<GarbageBin />
-								</button>
-							</Tooltip>
-						{:else}
-							{#if $user?.role === 'admin' || model.user_id === $user?.id || model.access_control.write.group_ids.some( (wg) => group_ids.includes(wg) )}
-								<a
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
-									href={`/workspace/models/edit?id=${encodeURIComponent(model.id)}`}
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="1.5"
-										stroke="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-										/>
-									</svg>
-								</a>
-							{/if}
-
-							<ModelMenu
-								user={$user}
-								{model}
-								cloneHandler={() => {
-									cloneModelHandler(model);
-								}}
-								exportHandler={() => {
-									exportModelHandler(model);
-								}}
-								hideHandler={() => {
-									hideModelHandler(model);
-								}}
-								deleteHandler={() => {
-									selectedModel = model;
-									showModelDeleteConfirm = true;
-								}}
-								onClose={() => {}}
-							>
-								<button
-									class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
-								>
-									<EllipsisHorizontal className="size-5" />
-								</button>
-							</ModelMenu>
-
-							<div class="ml-1">
-								<Tooltip content={model.is_active ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
-									<Switch
-										bind:state={model.is_active}
-										on:change={async (e) => {
-											toggleModelById(localStorage.token, model.id);
-											_models.set(
-												await getModels(
-													localStorage.token,
-													$config?.features?.enable_direct_connections &&
-														($settings?.directConnections ?? null)
-												)
-											);
-										}}
-									/>
-								</Tooltip>
-							</div>
-						{/if}
-					</div>
-				</div>
-			</div>
-		{/each}
-	</div>
+    <div class="my-4 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
+        {#each filteredModels as model}
+            <div class="flex flex-col w-full px-5 pt-4 pb-2 gap-3 rounded-lg transition hover:shadow-lg border-2 border-solid border-[#e6ebf0]">
+                <div class="flex items-center gap-3">
+                    <img class="rounded-full w-10 h-10" src='/static/favicon.png' alt="model profile" />
+                    <div class="text-base font-bold text-black">
+                        {model.name}
+                    </div>
+                </div>
+                <div class="text-sm line-clamp-3 text-[#596275] leading-7">
+                    {model.description}
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="font-bold text-[#465064]">
+                        {model.access_control ? '私有模式' : '公开模式'}
+                    </div>
+                    <button class="text-sm text-[#fff] px-2 py-1 rounded-md bg-[#465064]" on:click={() => {
+                        showModelSettingDialog = true;
+                        selectedAgent = model;
+                    }}>
+                        设置
+                    </button>
+                </div>
+            </div>
+        {/each}
+    </div>
 {:else}
 	<div class="w-full h-full flex justify-center items-center">
 		<Spinner />
