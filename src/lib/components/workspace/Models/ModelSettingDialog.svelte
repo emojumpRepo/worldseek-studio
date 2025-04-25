@@ -147,6 +147,10 @@
 
     // 保存智能体设置
 	const confirmHandler = async () => {
+        // 如果描述信息为空，则设置为官方应用的描述信息
+        if(!agent.description) {
+            agent.description = agent.workflow_app?.description || '';
+        }
         dispatch('confirm', agent);
 	};
 
