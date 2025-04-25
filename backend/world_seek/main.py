@@ -57,6 +57,7 @@ from world_seek.routers import (
     audio,
     images,
     ollama,
+    workflows,
     openai,
     retrieval,
     pipelines,
@@ -946,6 +947,8 @@ app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
 
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
+app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["workflows"])
+
 app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 app.include_router(retrieval.router, prefix="/api/v1/retrieval", tags=["retrieval"])
 

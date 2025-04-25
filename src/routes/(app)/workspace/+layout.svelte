@@ -9,17 +9,21 @@
 		models,
 		prompts,
 		knowledge,
-		tools
+		tools,
+		eventBus
 	} from '$lib/stores';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Plus from '../../../lib/components/icons/Plus.svelte';
+	import { createEventDispatcher } from 'svelte';
 
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 
 	const i18n = getContext('i18n');
 
 	let loaded = false;
+
+	const dispatch = createEventDispatcher();
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
@@ -126,6 +130,9 @@
 
 					<div
 						class="flex justify-center items-center gap-1 border border-solid border-black py-1 px-2 rounded-md text-sm cursor-pointer hover:bg-gray-100 transition"
+						on:click={() => {
+							eventBus.update(bus => ({ ...bus, showCreateDialog: true }));
+						}}
 					>
 						<Plus className="size-3" />
 						<span>新建</span>

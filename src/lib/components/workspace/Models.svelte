@@ -1,58 +1,79 @@
 <script lang="ts">
     import ModelSettingDialog from './Models/ModelSettingDialog.svelte';
+	import ModelCreateDialog from './Models/ModelCreateDialog.svelte';
 	import { toast } from 'svelte-sonner';
-
+    import type { Agent } from '$lib/types';
 	import { onMount, getContext, tick } from 'svelte';
 	const i18n = getContext('i18n');
 
 	import { WEBUI_NAME, config, mobile, models as _models, settings, user } from '$lib/stores';
 	import {
-		createNewModel,
 		deleteModelById,
 		getModels as getWorkspaceModels,
-		toggleModelById,
-		updateModelById
+		updateModelById,
+		createNewModel
 	} from '$lib/apis/models';
 
 	import { getModels } from '$lib/apis';
 	import { getGroups } from '$lib/apis/groups';
 	import Spinner from '../common/Spinner.svelte';
+	import { eventBus } from '$lib/stores';
 
 	let shiftKey = false;
 	let loaded = false;
 
-    let selectedAgent = {
+    let selectedAgent: Agent = {
+        id: '',
         name: '',
         description: '',
-        params: {},
         access_control: {},
+        base_app_id: '',
+        user_id: '',
+        params: {
+            model: '',
+            prompt: '',
+            knowledge: {
+                settings: {
+                    searchMode: '',
+                    useLimit: 0,
+                    relevance: 0,
+                    contentReordering: false,
+                    optimization: false,
+                },
+                items: [],
+            },
+            tools: [],
+        },
     }
 
-	let models = [];
+	let models: Agent[] = [];
 
-	let filteredModels = [];
+	let filteredModels: Agent[] = [];
 
-	let showModelSettingDialog = true;
-
+	let showModelSettingDialog = false;
+	let showModelCreateDialog = false;
 	let group_ids = [];
 
 	$: if (models) {
 		filteredModels = models.filter(
 			(m) => searchValue === '' || m.name.toLowerCase().includes(searchValue.toLowerCase())
 		);
-		console.log('filteredModels', filteredModels);
 	}
 
 	let searchValue = '';
 
-	const deleteModelHandler = async (model) => {
-		const res = await deleteModelById(localStorage.token, model.id).catch((e) => {
-			toast.error(`${e}`);
+	const deleteModelHandler = async (e: CustomEvent<Agent>) => {
+        console.log('deleteModelHandler e', e)
+		const res = await deleteModelById(localStorage.token, e.detail.id).catch((e) => {
+			toast.error($i18n.t(`Model {{name}} Settings Delete Failed`, { name: e.detail.name }));
 			return null;
 		});
 
 		if (res) {
-			toast.success($i18n.t(`Deleted {{name}}`, { name: model.id }));
+			toast.success($i18n.t(`Model {{name}} Settings Delete Success`, { name: e.detail.name }));
+            showModelSettingDialog = false;
+		} else {
+			toast.error($i18n.t(`Model {{name}} Settings Delete Failed`, { name: e.detail.name }));
 		}
 
 		await _models.set(
@@ -64,9 +85,53 @@
 		models = await getWorkspaceModels(localStorage.token);
 	};
 
+    const saveModelHandler = async (e: CustomEvent<Agent>) => {
+        const res = await updateModelById(localStorage.token, e.detail.id, e.detail).catch((e) => {
+			toast.error($i18n.t(`Model APP Settings Save Failed`));
+			return null;
+		});
+
+		if (res) {
+			toast.success($i18n.t(`Model APP Settings Save Success`));
+            showModelSettingDialog = false;
+		} else {
+			toast.error($i18n.t(`Model APP Settings Save Failed`));
+		}
+
+		await _models.set(
+			await getModels(
+				localStorage.token,
+				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+			)
+		);
+		models = await getWorkspaceModels(localStorage.token);
+    }
+
+    const createModelHandler = async (e: CustomEvent<Agent>) => {
+        console.log('createModelHandler', e.detail);
+        const res = await createNewModel(localStorage.token, e.detail).catch((e) => {
+			toast.error($i18n.t(`Model Create Failed`));
+			return null;
+		});
+
+		if (res) {
+			toast.success($i18n.t(`Model Create Success`));
+            showModelCreateDialog = false;
+		} else {
+			toast.error($i18n.t(`Model Create Failed`));
+		}
+
+		await _models.set(
+			await getModels(
+				localStorage.token,
+				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+			)
+		);
+		models = await getWorkspaceModels(localStorage.token);
+    }
+
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
-		console.log('models', models);
 		let groups = await getGroups(localStorage.token);
 		group_ids = groups.map((group) => group.id);
 
@@ -98,6 +163,14 @@
 			window.removeEventListener('blur-sm', onBlur);
 		};
 	});
+
+	// 订阅eventBus的变化
+	$: if ($eventBus.showCreateDialog) {
+		// 显示创建弹窗
+		showModelCreateDialog = true;
+		// 重置状态
+		eventBus.update(bus => ({ ...bus, showCreateDialog: false }));
+	}
 </script>
 
 <svelte:head>
@@ -110,21 +183,30 @@
 	<ModelSettingDialog
 		bind:show={showModelSettingDialog}
         bind:agent={selectedAgent}
+        on:confirm={saveModelHandler}
+        on:delete={deleteModelHandler}
+	/>
+
+	<ModelCreateDialog
+		bind:show={showModelCreateDialog}
+        on:confirm={createModelHandler}
 	/>
 
     <div class="my-4 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
         {#each filteredModels as model}
-            <div class="flex flex-col w-full px-5 pt-4 pb-2 gap-3 rounded-lg transition hover:shadow-lg border-2 border-solid border-[#e6ebf0]">
-                <div class="flex items-center gap-3">
-                    <img class="rounded-full w-10 h-10" src='/static/favicon.png' alt="model profile" />
-                    <div class="text-base font-bold text-black">
-                        {model.name}
+            <div class="flex flex-col w-full px-5 py-4 rounded-lg transition hover:shadow-lg border-2 border-solid border-[#e6ebf0]">
+                <div class="flex-1 overflow-y-auto">
+                    <div class="flex items-center gap-3">
+                        <img class="rounded-full w-10 h-10" src='/static/favicon.png' alt="model profile" />
+                        <div class="text-base font-bold text-black">
+                            {model.name}
+                        </div>
+                    </div>
+                    <div class="text-sm line-clamp-3 text-[#596275] leading-7 mt-3">
+                        {model.description}
                     </div>
                 </div>
-                <div class="text-sm line-clamp-3 text-[#596275] leading-7">
-                    {model.description}
-                </div>
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between mt-3">
                     <div class="font-bold text-[#465064]">
                         {model.access_control ? '私有模式' : '公开模式'}
                     </div>
