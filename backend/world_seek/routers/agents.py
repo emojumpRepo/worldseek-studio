@@ -4,7 +4,7 @@ from world_seek.agents.agents import (
     AgentForm,
     AgentModel,
     AgentResponse,
-    AgentUserResponse,
+    AgentUserWorkflowResponse,
     Agents,
 )
 from world_seek.constants import ERROR_MESSAGES
@@ -23,7 +23,7 @@ router = APIRouter()
 ###########################
 
 
-@router.get("/", response_model=list[AgentUserResponse])
+@router.get("/", response_model=list[AgentUserWorkflowResponse])
 async def get_agents(id: Optional[str] = None, user=Depends(get_verified_user)):
     print(f"get_agents: {user}")
     if user.role == "admin":
@@ -53,6 +53,7 @@ async def create_new_agent(
     form_data: AgentForm,
     user=Depends(get_verified_user),
 ):
+    print(f"create_new_agent: {form_data}")
     if user.role != "admin" and not has_permission(
         user.id, "workspace.agents", request.app.state.config.USER_PERMISSIONS
     ):
@@ -61,22 +62,24 @@ async def create_new_agent(
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
 
-    agent = Agents.get_agent_by_id(form_data.id)
-    if agent:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.AGENT_ID_TAKEN,
-        )
-
-    else:
-        agent = Agents.insert_new_agent(form_data, user.id)
+    # 检查ID是否已存在
+    if form_data.id:
+        agent = Agents.get_agent_by_id(form_data.id)
         if agent:
-            return agent
-        else:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.DEFAULT(),
+                status_code=status.HTTP_409_CONFLICT,
+                detail=ERROR_MESSAGES.AGENT_ID_TAKEN,
             )
+
+    # 创建新代理
+    agent = Agents.insert_new_agent(form_data, user.id)
+    if agent:
+        return agent
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ERROR_MESSAGES.DEFAULT("Failed to create agent. Please check logs for details."),
+        )
 
 
 ###########################
@@ -149,6 +152,7 @@ async def update_agent_by_id(
     user=Depends(get_verified_user),
 ):
     agent = Agents.get_agent_by_id(id)
+    print(f"update_agent: {agent}")
 
     if not agent:
         raise HTTPException(

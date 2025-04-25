@@ -27,7 +27,38 @@ export const getModels = async (token: string = '') => {
 	if (error) {
 		throw error;
 	}
+    console.log('res', res);
+	return res;
+};
 
+export const getWorkflowApps = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/workflows/`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.then((json) => {
+			return { data: Array.isArray(json) ? json : [] };
+		})
+		.catch((err) => {
+			error = err;
+			console.log('getWorkflowApps error:', err);
+			return { data: [] };
+		});
+
+	if (error) {
+		console.error('getWorkflowApps捕获到错误:', error);
+		return { data: [] };
+	}
 	return res;
 };
 
@@ -65,7 +96,7 @@ export const getBaseModels = async (token: string = '') => {
 export const createNewModel = async (token: string, model: object) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/models/create`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/agents/create`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -167,7 +198,7 @@ export const updateModelById = async (token: string, id: string, model: object) 
 	const searchParams = new URLSearchParams();
 	searchParams.append('id', id);
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/models/model/update?${searchParams.toString()}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/agents/agent/update?${searchParams.toString()}`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -203,7 +234,7 @@ export const deleteModelById = async (token: string, id: string) => {
 	const searchParams = new URLSearchParams();
 	searchParams.append('id', id);
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/models/model/delete?${searchParams.toString()}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/agents/agent/delete?${searchParams.toString()}`, {
 		method: 'DELETE',
 		headers: {
 			Accept: 'application/json',

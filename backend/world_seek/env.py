@@ -80,6 +80,7 @@ if "cuda_error" in locals():
 
 log_sources = [
     "AGENTS",
+    "WORKFLOWS",
     "AUDIO",
     "COMFYUI",
     "CONFIG",

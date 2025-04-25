@@ -1,12 +1,12 @@
 import logging
 import time
-from typing import Optional
+from typing import Optional, Union
 
 from world_seek.internal.db import Base, JSONField, get_db
 from world_seek.env import SRC_LOG_LEVELS
 
 from world_seek.models.users import Users, UserResponse
-
+from world_seek.workflows.workflows import Workflows, WorkflowResponse
 
 from pydantic import BaseModel, ConfigDict
 
@@ -43,7 +43,7 @@ class Agent(Base):
 
     user_id = Column(Text)
 
-    base_app_id = Column(Text, nullable=True)
+    base_app_id = Column(Integer)
     """
         An optional pointer to the actual app that should be used when proxying requests.
     """
@@ -87,13 +87,13 @@ class Agent(Base):
 
 
 class AgentModel(BaseModel):
-    id: int
-    base_app_id: Optional[str] = None
+    id: Optional[int] = None
+    base_app_id: Optional[int] = None
     user_id: Optional[str] = None
     
     name: str
     description: str
-
+    params: Optional[dict] = None
     access_control: Optional[dict] = None
 
     is_deleted: bool
@@ -111,38 +111,72 @@ class AgentModel(BaseModel):
 class AgentUserResponse(AgentModel):
     user: Optional[UserResponse] = None
 
+class AgentUserWorkflowResponse(AgentModel):
+    user: Optional[UserResponse] = None
+    workflow_app: Optional[WorkflowResponse] = None
 
 class AgentResponse(AgentModel):
     pass
 
 
 class AgentForm(BaseModel):
-    id: int
-    base_app_id: Optional[str] = None
+    id: Optional[Union[int, str]] = None
+    base_app_id: Optional[Union[int, str]] = None
     name: str
     description: str
     access_control: Optional[dict] = None
     is_deleted: bool = False
-
+    params: Optional[dict] = None
+    user_id: Optional[str] = None
 
 class ModelsTable:
     def insert_new_agent(
         self, form_data: AgentForm, user_id: str
     ) -> Optional[AgentModel]:
-        model = AgentModel(
-            **{
-                **form_data.model_dump(),
-                "user_id": user_id,
-                "created_at": int(time.time()),
-                "updated_at": int(time.time()),
-            }
-        )
+        print(f"insert_new_agent: {form_data}")
+        print(f"user_id: {user_id}")
         try:
+            # 确保id字段为整数类型
+            form_data_dict = form_data.model_dump()
+            if form_data_dict.get('id') and isinstance(form_data_dict['id'], str):
+                try:
+                    form_data_dict['id'] = int(form_data_dict['id'])
+                except ValueError:
+                    log.error(f"Failed to convert id to integer: {form_data_dict['id']}")
+                    return None
+                    
+            # 确保base_app_id字段为整数类型或None
+            if form_data_dict.get('base_app_id') and isinstance(form_data_dict['base_app_id'], str):
+                try:
+                    if form_data_dict['base_app_id'] and form_data_dict['base_app_id'].strip():
+                        form_data_dict['base_app_id'] = int(form_data_dict['base_app_id'])
+                    else:
+                        form_data_dict['base_app_id'] = None
+                except ValueError:
+                    log.error(f"Failed to convert base_app_id to integer: {form_data_dict['base_app_id']}")
+                    form_data_dict['base_app_id'] = None
+            
+            # 移除AgentModel不需要的字段
+            if 'parent_agent_id' in form_data_dict:
+                del form_data_dict['parent_agent_id']
+                
+            model = AgentModel(
+                **{
+                    **form_data_dict,
+                    "user_id": user_id,
+                    "created_at": int(time.time()),
+                    "updated_at": int(time.time()),
+                }
+            )
+            
             with get_db() as db:
+                log.debug(f"Creating Agent with data: {model.model_dump()}")
                 result = Agent(**model.model_dump())
                 db.add(result)
                 db.commit()
                 db.refresh(result)
+
+                print(f"insert_new_agent result: {result}")
 
                 if result:
                     return AgentModel.model_validate(result)
@@ -156,12 +190,12 @@ class ModelsTable:
         with get_db() as db:
             return [AgentModel.model_validate(model) for model in db.query(Agent).all()]
 
-    def get_agents(self, user_id=None, user_role=None) -> list[AgentUserResponse]:
+    def get_agents(self, user_id=None, user_role=None) -> list[AgentUserWorkflowResponse]:
         try:
             with get_db() as db:
                 agents = []
-                # 获取所有记录
-                all_agents = db.query(Agent).all()
+                # 获取所有记录，过滤is_deleted=False
+                all_agents = db.query(Agent).filter_by(is_deleted=False).all()
                 print(f"查询到 {len(all_agents)} 条记录")
                 
                 for agent in all_agents:
@@ -176,6 +210,16 @@ class ModelsTable:
                             except Exception as e:
                                 print(f"获取用户信息失败: {e}")
                         
+                        # 安全地获取workflow_app
+                        workflow_app = None
+                        if agent.base_app_id:
+                            try:
+                                workflow_app = Workflows.get_workflow_by_id(agent.base_app_id)
+                            except Exception as e:
+                                print(f"获取workflow_app失败: {e}")
+                        
+                        print(f"workflow_app: {workflow_app}")
+
                         # 安全地验证模型
                         try:
                             agent_model = AgentModel.model_validate(agent)
@@ -186,9 +230,10 @@ class ModelsTable:
                             response_data = {
                                 **agent_data,
                                 "user": user_data,
+                                "workflow_app": workflow_app,
                             }
                             
-                            agent_response = AgentUserResponse.model_validate(response_data)
+                            agent_response = AgentUserWorkflowResponse.model_validate(response_data)
                             
                             # 如果提供了用户ID和角色，进行权限过滤
                             if user_id is not None:
@@ -228,16 +273,16 @@ class ModelsTable:
         with get_db() as db:
             return [
                 AgentModel.model_validate(agent)
-                for agent in db.query(Agent).filter(Agent.base_app_id == None).all()
+                for agent in db.query(Agent).filter(Agent.base_app_id == None).filter_by(is_deleted=False).all()
             ]
 
     def get_agents_by_user_id(
         self, user_id: str, permission: str = "read", user_role: str = "user"
-    ) -> list[AgentUserResponse]:
+    ) -> list[AgentUserWorkflowResponse]:
         try:
             agents = []
             with get_db() as db:
-                all_agents = db.query(Agent).all()
+                all_agents = db.query(Agent).filter_by(is_deleted=False).all()
                 
                 for agent in all_agents:
                     try:
@@ -260,14 +305,22 @@ class ModelsTable:
                             except Exception as e:
                                 print(f"获取用户信息失败: {e}")
                         
+                        workflow_app = None
+                        if agent.base_app_id:
+                            try:
+                                workflow_app = Workflows.get_workflow_by_id(agent.base_app_id)
+                            except Exception as e:
+                                print(f"获取workflow_app失败: {e}")
+                        
                         agent_model = AgentModel.model_validate(agent)
                         agent_data = agent_model.model_dump()
                         user_data = user.model_dump() if user else None
                         response_data = {
                             **agent_data,
                             "user": user_data,
+                            "workflow_app": workflow_app,
                         }
-                        agent_response = AgentUserResponse.model_validate(response_data)
+                        agent_response = AgentUserWorkflowResponse.model_validate(response_data)
                         agents.append(agent_response)
                     except Exception as e:
                         print(f"过滤agent时出错: {e}")
@@ -282,7 +335,9 @@ class ModelsTable:
         try:
             with get_db() as db:
                 agent = db.get(Agent, id)
-                return AgentModel.model_validate(agent)
+                if agent and not agent.is_deleted:
+                    return AgentModel.model_validate(agent)
+                return None
         except Exception:
             return None
 
@@ -307,13 +362,17 @@ class ModelsTable:
         try:
             with get_db() as db:
                 # update only the fields that are present in the model
+                update_data = agent.model_dump(exclude={"id", "user_id", "created_at"})
+                update_data["updated_at"] = int(time.time())  # 添加更新时间
+                
                 result = (
                     db.query(Agent)
                     .filter_by(id=id)
-                    .update(agent.model_dump(exclude={"id"}))
+                    .update(update_data)
                 )
                 db.commit()
 
+                print(f"update_agent_by_id result: {result}")
                 agent = db.get(Agent, id)
                 db.refresh(agent)
                 return AgentModel.model_validate(agent)
@@ -324,7 +383,7 @@ class ModelsTable:
     def delete_agent_by_id(self, id: str) -> bool:
         try:
             with get_db() as db:
-                db.query(Agent).filter_by(id=id).delete()
+                db.query(Agent).filter_by(id=id).update({"is_deleted": True})
                 db.commit()
 
                 return True
