@@ -127,16 +127,6 @@
 							</a>
 						{/if} -->
 					</div>
-
-					<div
-						class="flex justify-center items-center gap-1 border border-solid border-black py-1 px-2 rounded-md text-sm cursor-pointer hover:bg-gray-100 transition"
-						on:click={() => {
-							eventBus.update(bus => ({ ...bus, showCreateDialog: true }));
-						}}
-					>
-						<Plus className="size-3" />
-						<span>新建</span>
-					</div>
 				</div>
 
 				<!-- <div class="flex items-center text-xl font-semibold">{$i18n.t('Workspace')}</div> -->

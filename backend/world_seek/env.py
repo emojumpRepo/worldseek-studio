@@ -107,11 +107,11 @@ for source in log_sources:
 
 log.setLevel(SRC_LOG_LEVELS["CONFIG"])
 
-WEBUI_NAME = os.environ.get("WEBUI_NAME", "Open WebUI")
-if WEBUI_NAME != "Open WebUI":
-    WEBUI_NAME += " (Open WebUI)"
+WEBUI_NAME = os.environ.get("WEBUI_NAME", "WorldSeek Studio")
+if WEBUI_NAME != "WorldSeek Studio":
+    WEBUI_NAME += " (WorldSeek Studio)"
 
-WEBUI_FAVICON_URL = "https://openwebui.com/favicon.png"
+WEBUI_FAVICON_URL = "https://worldseek.com/favicon.png"
 
 TRUSTED_SIGNATURE_KEY = os.environ.get("TRUSTED_SIGNATURE_KEY", "")
 
@@ -438,6 +438,21 @@ else:
         )
     except Exception:
         AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA = 10
+
+# 工具执行超时时间
+AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION = os.environ.get(
+    "AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION", "60"
+)
+
+if AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION == "":
+    AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION = None
+else:
+    try:
+        AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION = int(
+            AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION
+        )
+    except Exception:
+        AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION = 60
 
 ####################################
 # OFFLINE_MODE

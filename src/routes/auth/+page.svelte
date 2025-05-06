@@ -182,8 +182,8 @@
 					<img
 						id="logo"
 						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/splash.png"
-						class=" w-6 rounded-full"
+						src="{WEBUI_BASE_URL}/static/studio_logo.svg"
+						class="w-50"
 						alt="logo"
 					/>
 				</div>

@@ -6,6 +6,7 @@
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import type { Agent, WorkflowApp } from '$lib/types';
 	import { createNewModel, getWorkflowApps } from '$lib/apis/models';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -15,10 +16,10 @@
 	let modalElement: HTMLElement | null = null;
 	let mounted = false;
 	let isClosing = false;
+	let isLoading = false;
 
 	const handleKeyDown = (event: KeyboardEvent) => {
 		if (event.key === 'Escape') {
-			console.log('Escape');
 			closeModal();
 		}
 	};
@@ -54,10 +55,12 @@
 
 	// 获取所有可选应用
 	const getAllWorkflowApps = async () => {
+		isLoading = true;
 		getWorkflowApps(localStorage.token).then((res) => {
 			if (res.data) {
 				workflowApps = res.data;
 			}
+			isLoading = false;
 		});
 	};
 
@@ -93,7 +96,7 @@
 		}}
 	>
 		<div
-			class="modal-content m-auto rounded-lg max-w-full w-[35rem] mx-2 bg-gray-50 dark:bg-gray-950 max-h-[90vh] shadow-3xl flex flex-col {isClosing
+			class="modal-content m-auto rounded-xl max-w-full w-[40rem] mx-2 bg-gray-50 max-h-[90vh] shadow-3xl flex flex-col {isClosing
 				? 'modal-closing'
 				: ''}"
 			on:mousedown={(e) => {
@@ -101,11 +104,12 @@
 			}}
 		>
 			<!-- 设置弹窗头部（标题和关闭按钮） -->
-			<div class="modal-header p-3">
-				<div class="font-medium dark:text-gray-200">
+			<div class="modal-header p-4 border-b border-gray-200">
+				<div class="text-lg font-semibold text-gray-800">
 					{$i18n.t('Model Create')}
 				</div>
 				<button
+					class="hover:bg-gray-200 rounded-full p-1 transition-colors duration-200"
 					on:pointerdown={(e) => {
 						e.stopImmediatePropagation();
 						e.preventDefault();
@@ -120,54 +124,69 @@
 			</div>
 
 			<!-- 表单部分 - 添加滚动 -->
-			<div class="p-3 flex-1">
-				<div class="flex flex-col gap-4 text-sm">
-					<!-- 智能体名称 表单项 -->
-					<div class="form-group">
-						<div class="form-header">
-							<div class="form-title">
-								{$i18n.t('Model Name')}
+			<div class="p-5 flex-1 overflow-y-auto">
+				{#if isLoading}
+					<div class="flex items-center justify-center h-40">
+						<Spinner className="w-10 h-10" />
+					</div>
+				{:else}
+					<div class="flex flex-col gap-6">
+						<!-- 智能体名称 表单项 -->
+						<div class="form-group">
+							<div class="form-header mb-2">
+								<div class="form-title text-sm">
+									{$i18n.t('Model Name')}
+								</div>
+							</div>
+							<input
+								type="text"
+								class="form-input focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow duration-200"
+								bind:value={name}
+								placeholder={$i18n.t('Model Name Placeholder')}
+							/>
+						</div>
+
+						<!-- 可选应用 表单项 -->
+						<div class="form-group flex-1">
+							<div class="form-title text-sm mb-2">
+								{$i18n.t('Model APP Choice')}
+							</div>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 pb-1">
+								{#each workflowApps as workflowApp}
+									<div
+										class="app-card {selectedWorkflowApp?.id === workflowApp.id ? 'app-card-selected' : ''}"
+										on:click={() => {
+											selectedWorkflowApp = workflowApp;
+											name = workflowApp.name;
+										}}
+									>
+										<div class="app-badge">
+											<span class="app-initial">{workflowApp.name.charAt(0)}</span>
+										</div>
+										<div class="app-card-content">
+											<div class="app-card-name">{workflowApp.name}</div>
+											<div class="app-card-desc">{workflowApp.description}</div>
+										</div>
+									</div>
+								{/each}
 							</div>
 						</div>
-						<input
-							type="text"
-							class="form-input"
-							bind:value={name}
-							placeholder={$i18n.t('Model Name Placeholder')}
-						/>
 					</div>
-
-					<!-- 可选应用 表单项 -->
-					<div class="form-group flex-1">
-						<div class="form-title">
-							{$i18n.t('Model APP Choice')}
-						</div>
-						<div class="grid grid-cols-2 gap-2 flex-1 overflow-y-auto">
-							{#each workflowApps as workflowApp}
-								<div
-									class="rounded-lg p-3 cursor-pointer hover:shadow-md transition-all duration-200 {selectedWorkflowApp?.id ===
-									workflowApp.id
-										? 'bg-[#414141] text-white'
-										: 'bg-[#f0f0f0] text-black'}"
-									on:click={() => {
-										selectedWorkflowApp = workflowApp;
-										name = workflowApp.name;
-									}}
-								>
-									<div class="text-sm font-semibold">{workflowApp.name}</div>
-									<div class="text-xs mt-1">{workflowApp.description}</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-				</div>
+				{/if}
 			</div>
 
-			<div class="p-3 mt-0 flex justify-between items-center">
-				<button class="action-button action-button-cancel" on:click={closeModal}>
+			<div class="p-4 border-t border-gray-200 flex justify-end items-center gap-3">
+				<button 
+					class="btn-cancel" 
+					on:click={closeModal}
+				>
 					{$i18n.t('Cancel')}
 				</button>
-				<button class="action-button action-button-save" on:click={confirmHandler}>
+				<button 
+					class="btn-primary" 
+					on:click={confirmHandler}
+					disabled={!selectedWorkflowApp}
+				>
 					{$i18n.t('Create')}
 				</button>
 			</div>
@@ -183,6 +202,7 @@
 		left: 0;
 		bottom: 0;
 		background-color: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(2px);
 		width: 100%;
 		height: 100vh;
 		max-height: 100dvh;
@@ -214,7 +234,6 @@
 	.form-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
 	}
 
 	.form-header {
@@ -224,92 +243,125 @@
 	}
 
 	.form-title {
-		font-weight: 700;
-		color: black;
+		font-weight: 600;
+		color: #374151;
 	}
 
 	.form-input {
 		width: 100%;
-		border-radius: 0.375rem;
-		border: 1px solid #cccccc;
-		padding: 0.25rem 0.5rem;
-	}
-
-	.icon-button {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-	}
-
-	.action-button {
-		border-radius: 0.375rem;
-		border-width: 1px;
-		padding: 0.25rem 1rem;
-		font-size: 0.875rem;
-		transition: all 0.2s;
-	}
-
-	.action-button-delete {
-		border-color: #ef4444;
-		color: #ef4444;
-	}
-	.action-button-delete:hover {
-		background-color: #ef4444;
-		color: white;
-	}
-
-	.action-button-cancel {
-		border-color: #6b7280;
-		color: #6b7280;
-	}
-	.action-button-cancel:hover {
-		background-color: #6b7280;
-		color: white;
-	}
-
-	.action-button-save {
-		border-color: #000000;
-		color: #000000;
-	}
-	.action-button-save:hover {
-		background-color: #000000;
-		color: white;
-	}
-
-	.item-card {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.5rem;
-		background-color: white;
-		border-radius: 0.375rem;
+		border-radius: 0.5rem;
 		border: 1px solid #e5e7eb;
+		padding: 0.625rem 0.75rem;
+		background-color: white;
 	}
 
-	.item-card-content {
+	.app-card {
+		position: relative;
+		border-radius: 10px;
+		background-color: white;
+		padding: 16px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		display: flex;
+		align-items: flex-start;
+		gap: 14px;
+		min-height: 100px;
+		border: 1px solid transparent;
+	}
+
+	.app-card:hover {
+		background-color: #fafafa;
+	}
+
+	.app-card-selected {
+		background-color: #edf5ff;
+		border: 1px solid #3b82f6;
+	}
+
+	.app-badge {
+		width: 36px;
+		height: 36px;
+		border-radius: 8px;
+		background-color: #e0e7ff;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		flex-grow: 1;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+
+	.app-card-selected .app-badge {
+		background-color: #3b82f6;
+	}
+
+	.app-initial {
+		font-weight: 600;
+		font-size: 16px;
+		color: #4f46e5;
+	}
+
+	.app-card-selected .app-initial {
+		color: white;
+	}
+
+	.app-card-content {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding-top: 2px;
+	}
+
+	.app-card-name {
+		font-weight: 600;
+		font-size: 0.95rem;
+		color: #111827;
+	}
+
+	.app-card-desc {
+		font-size: 0.85rem;
+		color: #6b7280;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}
 
-	.item-card-title {
-		font-weight: 700;
-		color: black;
-		text-overflow: ellipsis;
-		overflow: hidden;
-		white-space: nowrap;
+	.btn-cancel {
+		border-radius: 0.5rem;
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		border: 1px solid #d1d5db;
+		background-color: white;
+		color: #374151;
+		transition: all 0.2s ease;
 	}
 
-	.item-delete-button {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		transition: color 0.2s;
+	.btn-cancel:hover {
+		background-color: #f3f4f6;
 	}
-	.item-delete-button:hover {
-		color: #ef4444;
+
+	.btn-primary {
+		border-radius: 0.5rem;
+		padding: 0.5rem 1.25rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		background-color: #2563eb;
+		color: white;
+		transition: all 0.2s ease;
+		border: 1px solid #2563eb;
+	}
+
+	.btn-primary:hover {
+		background-color: #1d4ed8;
+		border-color: #1d4ed8;
+	}
+
+	.btn-primary:disabled {
+		background-color: #93c5fd;
+		border-color: #93c5fd;
+		cursor: not-allowed;
 	}
 
 	@keyframes scaleUp {
