@@ -264,33 +264,33 @@
 				'openai',
 				'users'
 			]
-		},
-		{
-			id: 'about',
-			title: 'About',
-			keywords: [
-				'about',
-				'info',
-				'information',
-				'version',
-				'documentation',
-				'help',
-				'support',
-				'details',
-				'aboutus',
-				'softwareinfo',
-				'timothyjaeryangbaek',
-				'release',
-				'updates',
-				'updateinfo',
-				'versioninfo',
-				'aboutapp',
-				'terms',
-				'termsandconditions',
-				'contact',
-				'aboutpage'
-			]
 		}
+		// {
+		// 	id: 'about',
+		// 	title: 'About',
+		// 	keywords: [
+		// 		'about',
+		// 		'info',
+		// 		'information',
+		// 		'version',
+		// 		'documentation',
+		// 		'help',
+		// 		'support',
+		// 		'details',
+		// 		'aboutus',
+		// 		'softwareinfo',
+		// 		'timothyjaeryangbaek',
+		// 		'release',
+		// 		'updates',
+		// 		'updateinfo',
+		// 		'versioninfo',
+		// 		'aboutapp',
+		// 		'terms',
+		// 		'termsandconditions',
+		// 		'contact',
+		// 		'aboutpage'
+		// 	]
+		// }
 	];
 
 	let search = '';
