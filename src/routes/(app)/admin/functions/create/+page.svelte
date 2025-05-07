@@ -8,7 +8,7 @@
 	import FunctionEditor from '$lib/components/admin/Functions/FunctionEditor.svelte';
 	import { getModels } from '$lib/apis';
 	import { compareVersion, extractFrontmatter } from '$lib/utils';
-	import { WEBUI_VERSION } from '$lib/constants';
+	import { WS_VERSION } from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -20,14 +20,14 @@
 		console.log(data);
 
 		const manifest = extractFrontmatter(data.content);
-		if (compareVersion(manifest?.required_open_webui_version ?? '0.0.0', WEBUI_VERSION)) {
+		if (compareVersion(manifest?.required_world_seek_version ?? '0.0.0', WS_VERSION)) {
 			console.log('Version is lower than required');
 			toast.error(
 				$i18n.t(
-					'Open WebUI version (v{{OPEN_WEBUI_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
+					'WorldSeek version (v{{WORLD_SEEK_VERSION}}) is lower than required version (v{{REQUIRED_VERSION}})',
 					{
-						OPEN_WEBUI_VERSION: WEBUI_VERSION,
-						REQUIRED_VERSION: manifest?.required_open_webui_version ?? '0.0.0'
+						WORLD_SEEK_VERSION: WS_VERSION,
+						REQUIRED_VERSION: manifest?.required_world_seek_version ?? '0.0.0'
 					}
 				)
 			);
@@ -61,7 +61,7 @@
 	onMount(() => {
 		window.addEventListener('message', async (event) => {
 			if (
-				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'].includes(
+				!['http://localhost:9999'].includes(
 					event.origin
 				)
 			)

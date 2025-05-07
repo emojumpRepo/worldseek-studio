@@ -264,48 +264,61 @@
 				'openai',
 				'users'
 			]
-		},
-		{
-			id: 'about',
-			title: 'About',
-			keywords: [
-				'about',
-				'info',
-				'information',
-				'version',
-				'documentation',
-				'help',
-				'support',
-				'details',
-				'aboutus',
-				'softwareinfo',
-				'timothyjaeryangbaek',
-				'openwebui',
-				'release',
-				'updates',
-				'updateinfo',
-				'versioninfo',
-				'aboutapp',
-				'terms',
-				'termsandconditions',
-				'contact',
-				'aboutpage'
-			]
 		}
+		// {
+		// 	id: 'about',
+		// 	title: 'About',
+		// 	keywords: [
+		// 		'about',
+		// 		'info',
+		// 		'information',
+		// 		'version',
+		// 		'documentation',
+		// 		'help',
+		// 		'support',
+		// 		'details',
+		// 		'aboutus',
+		// 		'softwareinfo',
+		// 		'timothyjaeryangbaek',
+		// 		'release',
+		// 		'updates',
+		// 		'updateinfo',
+		// 		'versioninfo',
+		// 		'aboutapp',
+		// 		'terms',
+		// 		'termsandconditions',
+		// 		'contact',
+		// 		'aboutpage'
+		// 	]
+		// }
 	];
 
 	let search = '';
-	let visibleTabs = searchData.map((tab) => tab.id);
+	let visibleTabs = searchData
+		.filter((tab) => {
+			// 如果是普通用户且是 Interface 标签 和 About 标签，则隐藏
+			if ($user?.role !== 'admin' && (tab.id === 'interface' || tab.id === 'about')) {
+				return false;
+			}
+			return true;
+		})
+		.map((tab) => tab.id);
 	let searchDebounceTimeout;
 
 	const searchSettings = (query: string): string[] => {
 		const lowerCaseQuery = query.toLowerCase().trim();
 		return searchData
-			.filter(
-				(tab) =>
+			.filter((tab) => {
+				// First apply permission filter
+				if ($user?.role !== 'admin' && (tab.id === 'interface' || tab.id === 'about')) {
+					return false;
+				}
+				// Then apply search filter
+				return (
 					tab.title.toLowerCase().includes(lowerCaseQuery) ||
 					tab.keywords.some((keyword) => keyword.includes(lowerCaseQuery))
-			)
+				);
+			})
 			.map((tab) => tab.id);
 	};
 

@@ -4,12 +4,12 @@
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
 
-	import { WEBUI_VERSION } from '$lib/constants';
+	import { WS_VERSION } from '$lib/constants';
 	import XMark from '../icons/XMark.svelte';
 
 	export let version = {
-		current: WEBUI_VERSION,
-		latest: WEBUI_VERSION
+		current: WS_VERSION,
+		latest: WS_VERSION
 	};
 </script>
 
@@ -20,10 +20,6 @@
 		{$i18n.t(`A new version (v{{LATEST_VERSION}}) is now available.`, {
 			LATEST_VERSION: version.latest
 		})}
-
-		<a href="https://github.com/open-webui/open-webui/releases" target="_blank" class="underline">
-			{$i18n.t('Update for the latest features and improvements.')}</a
-		>
 	</div>
 
 	<div class=" shrink-0 pr-1">

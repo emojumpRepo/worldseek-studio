@@ -78,6 +78,7 @@
 		getTaskIdsByChatId
 	} from '$lib/apis';
 	import { getTools } from '$lib/apis/tools';
+	import { runLangflowWorkflow } from '$lib/apis/chats';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -1481,7 +1482,14 @@
 		chats.set(await getChatList(localStorage.token, $currentChatPage));
 	};
 
-	const sendPromptSocket = async (_history, model, responseMessageId, _chatId) => {
+	const sendPromptSocket = async (
+		_history,
+		model,
+		responseMessageId = null,
+		_chatId = null,
+		socket = null,
+		event = null
+	) => {
 		const responseMessage = _history.messages[responseMessageId];
 		const userMessage = _history.messages[responseMessage.parentId];
 
@@ -1508,146 +1516,18 @@
 		);
 		await tick();
 
-		const stream =
-			model?.info?.params?.stream_response ??
-			$settings?.params?.stream_response ??
-			params?.stream_response ??
-			true;
-
-		let messages = [
-			params?.system || $settings.system || (responseMessage?.userContext ?? null)
-				? {
-						role: 'system',
-						content: `${promptTemplate(
-							params?.system ?? $settings?.system ?? '',
-							$user?.name,
-							$settings?.userLocation
-								? await getAndUpdateUserLocation(localStorage.token).catch((err) => {
-										console.error(err);
-										return undefined;
-									})
-								: undefined
-						)}${
-							(responseMessage?.userContext ?? null)
-								? `\n\nUser Context:\n${responseMessage?.userContext ?? ''}`
-								: ''
-						}`
-					}
-				: undefined,
-			...createMessagesList(_history, responseMessageId).map((message) => ({
-				...message,
-				content: processDetails(message.content)
-			}))
-		].filter((message) => message);
-
-		messages = messages
-			.map((message, idx, arr) => ({
-				role: message.role,
-				...((message.files?.filter((file) => file.type === 'image').length > 0 ?? false) &&
-				message.role === 'user'
-					? {
-							content: [
-								{
-									type: 'text',
-									text: message?.merged?.content ?? message.content
-								},
-								...message.files
-									.filter((file) => file.type === 'image')
-									.map((file) => ({
-										type: 'image_url',
-										image_url: {
-											url: file.url
-										}
-									}))
-							]
-						}
-					: {
-							content: message?.merged?.content ?? message.content
-						})
-			}))
-			.filter((message) => message?.role === 'user' || message?.content?.trim());
-
-		const res = await generateOpenAIChatCompletion(
+		const useStream = $settings?.langflowStreamEnabled ?? true;
+		const res = await runLangflowWorkflow(
 			localStorage.token,
+			model.base_app_id,
+			createMessagesList(_history, responseMessageId).map((message) => ({
+				role: message.role,
+				content: message.content
+			})),
 			{
-				stream: stream,
-				model: model.id,
-				messages: messages,
-				params: {
-					...$settings?.params,
-					...params,
-
-					format: $settings.requestFormat ?? undefined,
-					keep_alive: $settings.keepAlive ?? undefined,
-					stop:
-						(params?.stop ?? $settings?.params?.stop ?? undefined)
-							? (params?.stop.split(',').map((token) => token.trim()) ?? $settings.params.stop).map(
-									(str) => decodeURIComponent(JSON.parse('"' + str.replace(/\"/g, '\\"') + '"'))
-								)
-							: undefined
-				},
-
-				files: (files?.length ?? 0) > 0 ? files : undefined,
-				tool_ids: selectedToolIds.length > 0 ? selectedToolIds : undefined,
-				tool_servers: $toolServers,
-
-				features: {
-					image_generation:
-						$config?.features?.enable_image_generation &&
-						($user?.role === 'admin' || $user?.permissions?.features?.image_generation)
-							? imageGenerationEnabled
-							: false,
-					code_interpreter:
-						$config?.features?.enable_code_interpreter &&
-						($user?.role === 'admin' || $user?.permissions?.features?.code_interpreter)
-							? codeInterpreterEnabled
-							: false,
-					web_search:
-						$config?.features?.enable_web_search &&
-						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
-							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
-							: false
-				},
-				variables: {
-					...getPromptVariables(
-						$user?.name,
-						$settings?.userLocation
-							? await getAndUpdateUserLocation(localStorage.token).catch((err) => {
-									console.error(err);
-									return undefined;
-								})
-							: undefined
-					)
-				},
-				model_item: $models.find((m) => m.id === model.id),
-
-				session_id: $socket?.id,
-				chat_id: $chatId,
-				id: responseMessageId,
-
-				...(!$temporaryChatEnabled &&
-				(messages.length == 1 ||
-					(messages.length == 2 &&
-						messages.at(0)?.role === 'system' &&
-						messages.at(1)?.role === 'user')) &&
-				(selectedModels[0] === model.id || atSelectedModel !== undefined)
-					? {
-							background_tasks: {
-								title_generation: $settings?.title?.auto ?? true,
-								tags_generation: $settings?.autoTags ?? true
-							}
-						}
-					: {}),
-
-				...(stream && (model.info?.meta?.capabilities?.usage ?? false)
-					? {
-							stream_options: {
-								include_usage: true
-							}
-						}
-					: {})
-			},
-			`${WEBUI_BASE_URL}/api`
+				stream: useStream,
+				session_id: history.id
+			}
 		).catch(async (error) => {
 			toast.error(`${error}`);
 
@@ -1662,12 +1542,21 @@
 		});
 
 		if (res) {
-			if (res.error) {
-				await handleOpenAIError(res.error, responseMessage);
+			if (useStream && res.body) {
+				// 处理流式响应
+				await handleLangflowStream(res, responseMessage);
+			} else if (res.error) {
+				// 处理错误响应
+				await handleLangflowError(res.error, responseMessage);
 			} else {
+				// 处理非流式响应
+				responseMessage.content = res.response || '';
+				responseMessage.done = true;
+				history.messages[responseMessageId] = responseMessage;
+				
 				if (taskIds) {
 					taskIds.push(res.task_id);
-				} else {
+				} else if (res.task_id) {
 					taskIds = [res.task_id];
 				}
 			}
@@ -1675,6 +1564,43 @@
 
 		await tick();
 		scrollToBottom();
+	};
+
+	const handleLangflowError = async (error, responseMessage) => {
+		let errorMessage = '';
+		let innerError;
+
+		if (error) {
+			innerError = error;
+		}
+
+		console.error(innerError);
+		if ('detail' in innerError) {
+			// FastAPI error
+			toast.error(innerError.detail);
+			errorMessage = innerError.detail;
+		} else if (typeof innerError === 'string') {
+			// String error
+			toast.error(innerError);
+			errorMessage = innerError;
+		} else {
+			// 其他错误类型
+			toast.error(String(innerError));
+			errorMessage = String(innerError);
+		}
+
+		responseMessage.error = {
+			content: $i18n.t(`Uh-oh! There was an issue with the workflow.`) + '\n' + errorMessage
+		};
+		responseMessage.done = true;
+
+		if (responseMessage.statusHistory) {
+			responseMessage.statusHistory = responseMessage.statusHistory.filter(
+				(status) => status.action !== 'knowledge_search'
+			);
+		}
+
+		history.messages[responseMessage.id] = responseMessage;
 	};
 
 	const handleOpenAIError = async (error, responseMessage) => {
@@ -1912,6 +1838,83 @@
 				currentChatPage.set(1);
 				await chats.set(await getChatList(localStorage.token, $currentChatPage));
 			}
+		}
+	};
+
+	const handleLangflowStream = async (res, responseMessage) => {
+		if (!res || !res.body) {
+			console.error('Invalid response from Langflow streaming API');
+			return;
+		}
+
+		const reader = res.body.getReader();
+		const decoder = new TextDecoder('utf-8');
+		let content = responseMessage.content || '';
+
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value, { stream: true });
+				const lines = chunk.split('\n');
+
+				for (const line of lines) {
+					if (line.startsWith('data:')) {
+						const data = line.slice(5).trim();
+						if (data === '[DONE]') continue;
+
+						try {
+							const jsonData = JSON.parse(data);
+							
+							// 检查错误
+							if (jsonData.error) {
+								console.error('Langflow stream error:', jsonData.error);
+								responseMessage.error = {
+									content: jsonData.error.detail || 'Error in Langflow stream'
+								};
+								continue;
+							}
+
+							// 从不同格式中提取内容
+							let messageContent = '';
+							if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+								// OpenAI格式
+								messageContent = jsonData.choices[0].delta.content;
+							} else if (jsonData.text) {
+								// 纯文本格式
+								messageContent = jsonData.text;
+							} else if (jsonData.response) {
+								// Langflow特定格式
+								messageContent = jsonData.response;
+							}
+
+							if (messageContent) {
+								content += messageContent;
+								responseMessage.content = content;
+								// 在这里更新显示内容
+								history.messages[responseMessageId] = responseMessage;
+								history = history;
+								await tick();
+								scrollToBottom();
+							}
+						} catch (e) {
+							console.error('Error parsing JSON from stream:', e, data);
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Error reading stream:', error);
+			responseMessage.error = {
+				content: `Stream error: ${error.message}`
+			};
+		} finally {
+			responseMessage.done = true;
+			history.messages[responseMessageId] = responseMessage;
+			history = history;
+			await tick();
+			scrollToBottom();
 		}
 	};
 </script>

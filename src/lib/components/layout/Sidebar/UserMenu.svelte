@@ -72,7 +72,7 @@
 				<div class=" self-center truncate">{$i18n.t('Settings')}</div>
 			</button>
 
-			<button
+			<!-- <button
 				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 				on:click={() => {
 					dispatch('show', 'archived-chat');
@@ -87,10 +87,10 @@
 					<ArchiveBox className="size-5" strokeWidth="1.5" />
 				</div>
 				<div class=" self-center truncate">{$i18n.t('Archived Chats')}</div>
-			</button>
+			</button> -->
 
 			{#if role === 'admin'}
-				<a
+				<!-- <a
 					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 					href="/playground"
 					on:click={() => {
@@ -118,7 +118,7 @@
 						</svg>
 					</div>
 					<div class=" self-center truncate">{$i18n.t('Playground')}</div>
-				</a>
+				</a> -->
 
 				<a
 					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"

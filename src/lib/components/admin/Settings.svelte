@@ -71,7 +71,7 @@
 			<div class=" self-center">{$i18n.t('General')}</div>
 		</button>
 
-		<button
+		<!-- <button
 			class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 			'connections'
 				? ''
@@ -240,7 +240,7 @@
 				</svg>
 			</div>
 			<div class=" self-center">{$i18n.t('Code Execution')}</div>
-		</button>
+		</button> -->
 
 		<button
 			class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
@@ -295,7 +295,7 @@
 			<div class=" self-center">{$i18n.t('Audio')}</div>
 		</button>
 
-		<button
+		<!-- <button
 			class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 			'images'
 				? ''
@@ -377,7 +377,7 @@
 				</svg>
 			</div>
 			<div class=" self-center">{$i18n.t('Database')}</div>
-		</button>
+		</button> -->
 	</div>
 
 	<div class="flex-1 mt-3 lg:mt-0 overflow-y-scroll pr-1 scrollbar-hidden">
@@ -398,7 +398,7 @@
 			/>
 		{:else if selectedTab === 'models'}
 			<Models />
-		{:else if selectedTab === 'evaluations'}
+		<!-- {:else if selectedTab === 'evaluations'}
 			<Evaluations />
 		{:else if selectedTab === 'tools'}
 			<Tools />
@@ -428,7 +428,7 @@
 					await tick();
 					await config.set(await getBackendConfig());
 				}}
-			/>
+			/> -->
 		{:else if selectedTab === 'interface'}
 			<Interface
 				on:save={() => {
@@ -441,7 +441,7 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>
-		{:else if selectedTab === 'images'}
+		<!-- {:else if selectedTab === 'images'}
 			<Images
 				on:save={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
@@ -458,7 +458,7 @@
 				saveHandler={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
-			/>
+			/> -->
 		{/if}
 	</div>
 </div>

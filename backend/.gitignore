@@ -6,7 +6,8 @@ uploads
 *.db
 _test
 Pipfile
-!/data
 /data/*
-/open_webui/data/*
+!/data/
+!/data/webui.db
+/world_seek/data/*
 .webui_secret_key

@@ -1052,3 +1052,71 @@ export const archiveAllChats = async (token: string) => {
 
 	return res;
 };
+
+export const runLangflowWorkflow = async (
+	token: string = '',
+	workflowId: string,
+	messages: Array<{role: string, content: string}>,
+	params: any = {}
+) => {
+	let error = null;
+
+	// 处理流式响应的情况
+	if (params.stream === true) {
+		try {
+			const response = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
+				method: 'POST',
+				headers: {
+					Accept: 'application/json',
+					'Content-Type': 'application/json',
+					authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					workflow_id: workflowId,
+					messages,
+					params
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw errorData?.detail ?? 'Connection error';
+			}
+
+			// 返回原始响应对象，由调用方处理流
+			return response;
+		} catch (err) {
+			error = `Langflow workflow streaming: ${err?.detail ?? 'Connection error'}`;
+			throw error;
+		}
+	}
+
+	// 非流式响应的处理逻辑
+	const res = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({
+			workflow_id: workflowId,
+			messages,
+			params
+		})
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = `Langflow workflow: ${err?.detail ?? 'Connection error'}`;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};

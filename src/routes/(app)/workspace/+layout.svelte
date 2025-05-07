@@ -9,16 +9,21 @@
 		models,
 		prompts,
 		knowledge,
-		tools
+		tools,
+		eventBus
 	} from '$lib/stores';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import Plus from '../../../lib/components/icons/Plus.svelte';
+	import { createEventDispatcher } from 'svelte';
 
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 
 	const i18n = getContext('i18n');
 
 	let loaded = false;
+
+	const dispatch = createEventDispatcher();
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
@@ -55,8 +60,8 @@
 			? 'md:max-w-[calc(100%-260px)]'
 			: ''} max-w-full"
 	>
-		<nav class="   px-2.5 pt-1 backdrop-blur-xl drag-region">
-			<div class=" flex items-center gap-1">
+		<nav class="pl-2.5 pr-4.5 pt-1 backdrop-blur-xl drag-region">
+			<div class="flex items-center gap-1">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
 						id="sidebar-toggle-button"
@@ -72,18 +77,18 @@
 					</button>
 				</div>
 
-				<div class="">
+				<div class="flex-1 flex justify-between items-center">
 					<div
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
 					>
 						{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models}
 							<a
 								class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
-									'/workspace/models'
+									'/workspace/agents'
 								)
 									? ''
 									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-								href="/workspace/models">{$i18n.t('Models')}</a
+								href="/workspace/agents">{$i18n.t('Models')}</a
 							>
 						{/if}
 
@@ -100,7 +105,7 @@
 							</a>
 						{/if}
 
-						{#if $user?.role === 'admin' || $user?.permissions?.workspace?.prompts}
+						<!-- {#if $user?.role === 'admin' || $user?.permissions?.workspace?.prompts}
 							<a
 								class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
 									'/workspace/prompts'
@@ -120,7 +125,7 @@
 							>
 								{$i18n.t('Tools')}
 							</a>
-						{/if}
+						{/if} -->
 					</div>
 				</div>
 

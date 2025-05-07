@@ -1,54 +1,58 @@
 <script lang="ts">
-	import { marked } from 'marked';
-
+    import ModelSettingDialog from './Models/ModelSettingDialog.svelte';
+	import ModelCreateDialog from './Models/ModelCreateDialog.svelte';
 	import { toast } from 'svelte-sonner';
-	import Sortable from 'sortablejs';
-
-	import fileSaver from 'file-saver';
-	const { saveAs } = fileSaver;
-
+    import type { Agent } from '$lib/types';
 	import { onMount, getContext, tick } from 'svelte';
-	import { goto } from '$app/navigation';
 	const i18n = getContext('i18n');
 
 	import { WEBUI_NAME, config, mobile, models as _models, settings, user } from '$lib/stores';
 	import {
-		createNewModel,
 		deleteModelById,
 		getModels as getWorkspaceModels,
-		toggleModelById,
-		updateModelById
+		updateModelById,
+		createNewModel
 	} from '$lib/apis/models';
 
 	import { getModels } from '$lib/apis';
 	import { getGroups } from '$lib/apis/groups';
-
-	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
-	import ModelMenu from './Models/ModelMenu.svelte';
-	import ModelDeleteConfirmDialog from '../common/ConfirmDialog.svelte';
-	import Tooltip from '../common/Tooltip.svelte';
-	import GarbageBin from '../icons/GarbageBin.svelte';
-	import Search from '../icons/Search.svelte';
-	import Plus from '../icons/Plus.svelte';
-	import ChevronRight from '../icons/ChevronRight.svelte';
-	import Switch from '../common/Switch.svelte';
 	import Spinner from '../common/Spinner.svelte';
-	import { capitalizeFirstLetter } from '$lib/utils';
+	import { eventBus } from '$lib/stores';
 
 	let shiftKey = false;
-
-	let importFiles;
-	let modelsImportInputElement: HTMLInputElement;
 	let loaded = false;
 
-	let models = [];
+    let selectedAgent: Agent = {
+        id: '',
+        name: '',
+        description: '',
+        access_control: {},
+        base_app_id: '',
+        user_id: '',
+        params: {
+            model: '',
+            prompt: '',
+            knowledge: {
+                settings: {
+                    searchMode: '',
+                    useLimit: 0,
+                    relevance: 0,
+                    contentReordering: false,
+                    optimization: false,
+                },
+                items: [],
+            },
+            tools: [],
+        },
+    }
 
-	let filteredModels = [];
-	let selectedModel = null;
+	let models: Agent[] = [];
 
-	let showModelDeleteConfirm = false;
+	let filteredModels: Agent[] = [];
 
-	let group_ids = [];
+	let showModelSettingDialog = false;
+	let showModelCreateDialog = false;
+	let group_ids: string[] = [];
 
 	$: if (models) {
 		filteredModels = models.filter(
@@ -58,121 +62,79 @@
 
 	let searchValue = '';
 
-	const deleteModelHandler = async (model) => {
-		const res = await deleteModelById(localStorage.token, model.id).catch((e) => {
-			toast.error(`${e}`);
+	const deleteModelHandler = async (e: CustomEvent<Agent>) => {
+        console.log('deleteModelHandler e', e);
+		const res = await deleteModelById(localStorage.token, e.detail.id).catch((e) => {
+			toast.error($i18n.t(`Model {{name}} Settings Delete Failed`, { name: e.detail.name }));
 			return null;
 		});
 
 		if (res) {
-			toast.success($i18n.t(`Deleted {{name}}`, { name: model.id }));
+			toast.success($i18n.t(`Model {{name}} Settings Delete Success`, { name: e.detail.name }));
+            showModelSettingDialog = false;
+		} else {
+			toast.error($i18n.t(`Model {{name}} Settings Delete Failed`, { name: e.detail.name }));
 		}
 
 		await _models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 		models = await getWorkspaceModels(localStorage.token);
 	};
 
-	const cloneModelHandler = async (model) => {
-		sessionStorage.model = JSON.stringify({
-			...model,
-			id: `${model.id}-clone`,
-			name: `${model.name} (Clone)`
+    const saveModelHandler = async (e: CustomEvent<Agent>) => {
+        const res = await updateModelById(localStorage.token, e.detail.id, e.detail).catch((e) => {
+			toast.error($i18n.t(`Model APP Settings Save Failed`));
+			return null;
 		});
-		goto('/workspace/models/create');
-	};
-
-	const shareModelHandler = async (model) => {
-		toast.success($i18n.t('Redirecting you to Open WebUI Community'));
-
-		const url = 'https://openwebui.com';
-
-		const tab = await window.open(`${url}/models/create`, '_blank');
-
-		const messageHandler = (event) => {
-			if (event.origin !== url) return;
-			if (event.data === 'loaded') {
-				tab.postMessage(JSON.stringify(model), '*');
-				window.removeEventListener('message', messageHandler);
-			}
-		};
-
-		window.addEventListener('message', messageHandler, false);
-	};
-
-	const hideModelHandler = async (model) => {
-		let info = model.info;
-
-		if (!info) {
-			info = {
-				id: model.id,
-				name: model.name,
-				meta: {
-					suggestion_prompts: null
-				},
-				params: {}
-			};
-		}
-
-		info.meta = {
-			...info.meta,
-			hidden: !(info?.meta?.hidden ?? false)
-		};
-
-		console.log(info);
-
-		const res = await updateModelById(localStorage.token, info.id, info);
 
 		if (res) {
-			toast.success(
-				$i18n.t(`Model {{name}} is now {{status}}`, {
-					name: info.id,
-					status: info.meta.hidden ? 'hidden' : 'visible'
-				})
-			);
+			toast.success($i18n.t(`Model APP Settings Save Success`));
+            showModelSettingDialog = false;
+		} else {
+			toast.error($i18n.t(`Model APP Settings Save Failed`));
 		}
 
 		await _models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			await getModels(localStorage.token)
 		);
 		models = await getWorkspaceModels(localStorage.token);
-	};
+    }
 
-	const downloadModels = async (models) => {
-		let blob = new Blob([JSON.stringify(models)], {
-			type: 'application/json'
+    const createModelHandler = async (e: CustomEvent<Agent>) => {
+        console.log('createModelHandler', e.detail);
+        const res = await createNewModel(localStorage.token, e.detail).catch((e) => {
+			toast.error($i18n.t(`Model Create Failed`));
+			return null;
 		});
-		saveAs(blob, `models-export-${Date.now()}.json`);
-	};
 
-	const exportModelHandler = async (model) => {
-		let blob = new Blob([JSON.stringify([model])], {
-			type: 'application/json'
-		});
-		saveAs(blob, `${model.id}-${Date.now()}.json`);
-	};
+		if (res) {
+			toast.success($i18n.t(`Model Create Success`));
+            showModelCreateDialog = false;
+		} else {
+			toast.error($i18n.t(`Model Create Failed`));
+		}
+
+		await _models.set(
+			await getModels(localStorage.token)
+		);
+		models = await getWorkspaceModels(localStorage.token);
+    }
 
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
 		let groups = await getGroups(localStorage.token);
-		group_ids = groups.map((group) => group.id);
+		group_ids = groups.map((group: any) => group.id);
 
 		loaded = true;
 
-		const onKeyDown = (event) => {
+		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key === 'Shift') {
 				shiftKey = true;
 			}
 		};
 
-		const onKeyUp = (event) => {
+		const onKeyUp = (event: KeyboardEvent) => {
 			if (event.key === 'Shift') {
 				shiftKey = false;
 			}
@@ -192,6 +154,21 @@
 			window.removeEventListener('blur-sm', onBlur);
 		};
 	});
+
+	// 订阅eventBus的变化
+	$: if ($eventBus.showCreateDialog) {
+        console.log('showCreateDialog', $eventBus.showCreateDialog);
+		// 显示创建弹窗
+		showModelCreateDialog = true;
+		// 重置状态
+		eventBus.update(bus => ({ ...bus, showCreateDialog: false }));
+	}
+    
+    // 直接打开创建弹窗
+    const openCreateDialog = () => {
+        console.log('直接打开创建弹窗');
+        showModelCreateDialog = true;
+    };
 </script>
 
 <svelte:head>
@@ -201,338 +178,265 @@
 </svelte:head>
 
 {#if loaded}
-	<ModelDeleteConfirmDialog
-		bind:show={showModelDeleteConfirm}
-		on:confirm={() => {
-			deleteModelHandler(selectedModel);
-		}}
+	<ModelSettingDialog
+		bind:show={showModelSettingDialog}
+        bind:agent={selectedAgent}
+        on:confirm={saveModelHandler}
+        on:delete={deleteModelHandler}
 	/>
 
-	<div class="flex flex-col gap-1 my-1.5">
-		<div class="flex justify-between items-center">
-			<div class="flex items-center md:self-center text-xl font-medium px-0.5">
-				{$i18n.t('Models')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
-					>{filteredModels.length}</span
-				>
-			</div>
-		</div>
+	<ModelCreateDialog
+		bind:show={showModelCreateDialog}
+        on:confirm={createModelHandler}
+	/>
 
-		<div class=" flex flex-1 items-center w-full space-x-2">
-			<div class="flex flex-1 items-center">
-				<div class=" self-center ml-1 mr-3">
-					<Search className="size-3.5" />
-				</div>
-				<input
-					class=" w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
-					bind:value={searchValue}
-					placeholder={$i18n.t('Search Models')}
-				/>
-			</div>
-
-			<div>
-				<a
-					class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
-					href="/workspace/models/create"
-				>
-					<Plus className="size-3.5" />
-				</a>
-			</div>
-		</div>
-	</div>
-
-	<div class=" my-2 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
-		{#each filteredModels as model}
-			<div
-				class=" flex flex-col cursor-pointer w-full px-3 py-2 dark:hover:bg-white/5 hover:bg-black/5 rounded-xl transition"
-				id="model-item-{model.id}"
-			>
-				<div class="flex gap-4 mt-0.5 mb-0.5">
-					<div class=" w-[44px]">
-						<div
-							class=" rounded-full object-cover {model.is_active
-								? ''
-								: 'opacity-50 dark:opacity-50'} "
-						>
-							<img
-								src={model?.meta?.profile_image_url ?? '/static/favicon.png'}
-								alt="modelfile profile"
-								class=" rounded-full w-full h-auto object-cover"
-							/>
-						</div>
-					</div>
-
-					<a
-						class=" flex flex-1 cursor-pointer w-full"
-						href={`/?models=${encodeURIComponent(model.id)}`}
-					>
-						<div class=" flex-1 self-center {model.is_active ? '' : 'text-gray-500'}">
-							<Tooltip
-								content={marked.parse(model?.meta?.description ?? model.id)}
-								className=" w-fit"
-								placement="top-start"
-							>
-								<div class=" font-semibold line-clamp-1">{model.name}</div>
-							</Tooltip>
-
-							<div class="flex gap-1 text-xs overflow-hidden">
-								<div class="line-clamp-1">
-									{#if (model?.meta?.description ?? '').trim()}
-										{model?.meta?.description}
-									{:else}
-										{model.id}
-									{/if}
-								</div>
-							</div>
-						</div>
-					</a>
-				</div>
-
-				<div class="flex justify-between items-center -mb-0.5 px-0.5">
-					<div class=" text-xs mt-0.5">
-						<Tooltip
-							content={model?.user?.email ?? $i18n.t('Deleted User')}
-							className="flex shrink-0"
-							placement="top-start"
-						>
-							<div class="shrink-0 text-gray-500">
-								{$i18n.t('By {{name}}', {
-									name: capitalizeFirstLetter(
-										model?.user?.name ?? model?.user?.email ?? $i18n.t('Deleted User')
-									)
-								})}
-							</div>
-						</Tooltip>
-					</div>
-
-					<div class="flex flex-row gap-0.5 items-center">
-						{#if shiftKey}
-							<Tooltip content={$i18n.t('Delete')}>
-								<button
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
-									on:click={() => {
-										deleteModelHandler(model);
-									}}
-								>
-									<GarbageBin />
-								</button>
-							</Tooltip>
-						{:else}
-							{#if $user?.role === 'admin' || model.user_id === $user?.id || model.access_control.write.group_ids.some( (wg) => group_ids.includes(wg) )}
-								<a
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
-									href={`/workspace/models/edit?id=${encodeURIComponent(model.id)}`}
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="1.5"
-										stroke="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-										/>
-									</svg>
-								</a>
-							{/if}
-
-							<ModelMenu
-								user={$user}
-								{model}
-								shareHandler={() => {
-									shareModelHandler(model);
-								}}
-								cloneHandler={() => {
-									cloneModelHandler(model);
-								}}
-								exportHandler={() => {
-									exportModelHandler(model);
-								}}
-								hideHandler={() => {
-									hideModelHandler(model);
-								}}
-								deleteHandler={() => {
-									selectedModel = model;
-									showModelDeleteConfirm = true;
-								}}
-								onClose={() => {}}
-							>
-								<button
-									class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
-								>
-									<EllipsisHorizontal className="size-5" />
-								</button>
-							</ModelMenu>
-
-							<div class="ml-1">
-								<Tooltip content={model.is_active ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
-									<Switch
-										bind:state={model.is_active}
-										on:change={async (e) => {
-											toggleModelById(localStorage.token, model.id);
-											_models.set(
-												await getModels(
-													localStorage.token,
-													$config?.features?.enable_direct_connections &&
-														($settings?.directConnections ?? null)
-												)
-											);
-										}}
-									/>
-								</Tooltip>
-							</div>
-						{/if}
-					</div>
-				</div>
-			</div>
-		{/each}
-	</div>
-
-	{#if $user?.role === 'admin'}
-		<div class=" flex justify-end w-full mb-3">
-			<div class="flex space-x-1">
-				<input
-					id="models-import-input"
-					bind:this={modelsImportInputElement}
-					bind:files={importFiles}
-					type="file"
-					accept=".json"
-					hidden
-					on:change={() => {
-						console.log(importFiles);
-
-						let reader = new FileReader();
-						reader.onload = async (event) => {
-							let savedModels = JSON.parse(event.target.result);
-							console.log(savedModels);
-
-							for (const model of savedModels) {
-								if (model?.info ?? false) {
-									if ($_models.find((m) => m.id === model.id)) {
-										await updateModelById(localStorage.token, model.id, model.info).catch(
-											(error) => {
-												return null;
-											}
-										);
-									} else {
-										await createNewModel(localStorage.token, model.info).catch((error) => {
-											return null;
-										});
-									}
-								} else {
-									if (model?.id && model?.name) {
-										await createNewModel(localStorage.token, model).catch((error) => {
-											return null;
-										});
-									}
-								}
-							}
-
-							await _models.set(
-								await getModels(
-									localStorage.token,
-									$config?.features?.enable_direct_connections &&
-										($settings?.directConnections ?? null)
-								)
-							);
-							models = await getWorkspaceModels(localStorage.token);
-						};
-
-						reader.readAsText(importFiles[0]);
-					}}
-				/>
-
-				<button
-					class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
-					on:click={() => {
-						modelsImportInputElement.click();
-					}}
-				>
-					<div class=" self-center mr-2 font-medium line-clamp-1">{$i18n.t('Import Models')}</div>
-
-					<div class=" self-center">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 16 16"
-							fill="currentColor"
-							class="w-3.5 h-3.5"
-						>
-							<path
-								fill-rule="evenodd"
-								d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 9.5a.75.75 0 0 1-.75-.75V8.06l-.72.72a.75.75 0 0 1-1.06-1.06l2-2a.75.75 0 0 1 1.06 0l2 2a.75.75 0 1 1-1.06 1.06l-.72-.72v2.69a.75.75 0 0 1-.75.75Z"
-								clip-rule="evenodd"
-							/>
-						</svg>
-					</div>
-				</button>
-
-				{#if models.length}
-					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
-						on:click={async () => {
-							downloadModels(models);
-						}}
-					>
-						<div class=" self-center mr-2 font-medium line-clamp-1">
-							{$i18n.t('Export Models')}
-						</div>
-
-						<div class=" self-center">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 16 16"
-								fill="currentColor"
-								class="w-3.5 h-3.5"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 3.5a.75.75 0 0 1 .75.75v2.69l.72-.72a.75.75 0 1 1 1.06 1.06l-2 2a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 0 1 1.06-1.06l.72.72V6.25A.75.75 0 0 1 8 5.5Z"
-									clip-rule="evenodd"
-								/>
-							</svg>
-						</div>
-					</button>
-				{/if}
-			</div>
-		</div>
-	{/if}
-
-	{#if $config?.features.enable_community_sharing}
-		<div class=" my-16">
-			<div class=" text-xl font-medium mb-1 line-clamp-1">
-				{$i18n.t('Made by Open WebUI Community')}
-			</div>
-
-			<a
-				class=" flex cursor-pointer items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-850 w-full mb-2 px-3.5 py-1.5 rounded-xl transition"
-				href="https://openwebui.com/#open-webui-community"
-				target="_blank"
-			>
-				<div class=" self-center">
-					<div class=" font-semibold line-clamp-1">{$i18n.t('Discover a model')}</div>
-					<div class=" text-sm line-clamp-1">
-						{$i18n.t('Discover, download, and explore model presets')}
-					</div>
-				</div>
-
-				<div>
-					<div>
-						<ChevronRight />
-					</div>
-				</div>
-			</a>
-		</div>
-	{/if}
+    <div class="my-4 mb-5">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">智能体列表</h2>
+            <button 
+                class="flex items-center gap-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                on:click={openCreateDialog}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                新建智能体
+            </button>
+        </div>
+        <div class="gap-4 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
+            {#each filteredModels as model}
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-avatar">
+                            <span class="agent-initial">{model.name.charAt(0)}</span>
+                        </div>
+                        <div class="agent-info">
+                            <h3 class="agent-name">{model.name}</h3>
+                            <div class="agent-mode {model.access_control ? 'mode-private' : 'mode-public'}">
+                                {#if model.access_control}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="mode-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>私有模式</span>
+                                {:else}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="mode-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0110 2c-1.61 0-3.09.62-4.19 1.64a.75.75 0 010 1.06A5.99 5.99 0 0111 5.3c.3 0 .58.02.86.05.03.3.05.6.05.9V8a3 3 0 01-6 0V7.5a.5.5 0 00-1 0V8a4 4 0 108 0c0-.17-.01-.33-.03-.49a6 6 0 01-9.65 6.11.75.75 0 010-1.06A5.99 5.99 0 0110 14c.34 0 .67-.03 1-.1V10a.75.75 0 000-1.5v3.73c.84-.31 1.63-.84 2.27-1.57a.75.75 0 10-1.38-.91 4.62 4.62 0 01-3.89 2.2c-1.25 0-2.41-.5-3.3-1.29a.75.75 0 00-1.06 0A5.972 5.972 0 0110 18c3.31 0 6-2.69 6-6 0-.32-.03-.63-.08-.93a.748.748 0 00-.26-1.08c-.13-.09-.27-.16-.42-.21h-.01V8a3 3 0 00-3-3 3 3 0 00-3 3 .5.5 0 01-1 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>公开模式</span>
+                                {/if}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="agent-description">
+                        {model.description || '无描述'}
+                    </div>
+                    
+                    <div class="agent-footer">
+                        <button 
+                            class="agent-action-btn"
+                            on:click={() => {
+                                showModelSettingDialog = true;
+                                selectedAgent = model;
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            设置
+                        </button>
+                    </div>
+                </div>
+            {/each}
+        </div>
+    </div>
 {:else}
 	<div class="w-full h-full flex justify-center items-center">
 		<Spinner />
 	</div>
 {/if}
+
+<style>
+    .agent-card {
+        background-color: white;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+        transition: all 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .agent-card:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+    }
+    
+    .agent-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+    
+    .agent-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        background-color: #e0e7ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    
+    .agent-initial {
+        font-weight: 600;
+        font-size: 18px;
+        color: #4f46e5;
+    }
+    
+    .agent-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .agent-name {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #111827;
+        margin: 0;
+    }
+    
+    .agent-mode {
+        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        width: fit-content;
+    }
+    
+    .mode-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .mode-public {
+        color: #047857;
+        background-color: #ECFDF5;
+        border: 1px solid #A7F3D0;
+    }
+
+    .mode-private {
+        color: #7C3AED;
+        background-color: #F5F3FF;
+        border: 1px solid #DDD6FE;
+    }
+
+    :global(.dark) .mode-public {
+        color: #10B981;
+        background-color: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    :global(.dark) .mode-private {
+        color: #A78BFA;
+        background-color: rgba(167, 139, 250, 0.1);
+        border: 1px solid rgba(167, 139, 250, 0.2);
+    }
+    
+    .agent-description {
+        font-size: 0.9rem;
+        color: #4b5563;
+        flex-grow: 1;
+        line-height: 1.5;
+        margin-bottom: 16px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .agent-footer {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid #f3f4f6;
+    }
+    
+    .agent-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #4b5563;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background-color: #f9fafb;
+        transition: all 0.15s ease;
+    }
+    
+    .agent-action-btn:hover {
+        background-color: #f3f4f6;
+        border-color: #d1d5db;
+        color: #1f2937;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .agent-card {
+            background-color: #1f2937;
+            border-color: #374151;
+        }
+        
+        .agent-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+        
+        .agent-avatar {
+            background-color: #2e3a4f;
+        }
+        
+        .agent-initial {
+            color: #93c5fd;
+        }
+        
+        .agent-name {
+            color: #f3f4f6;
+        }
+        
+        .agent-mode {
+            background-color: #374151;
+            color: #d1d5db;
+        }
+        
+        .agent-description {
+            color: #d1d5db;
+        }
+        
+        .agent-footer {
+            border-top-color: #374151;
+        }
+        
+        .agent-action-btn {
+            background-color: #374151;
+            border-color: #4b5563;
+            color: #e5e7eb;
+        }
+        
+        .agent-action-btn:hover {
+            background-color: #4b5563;
+            border-color: #6b7280;
+            color: #f9fafb;
+        }
+    }
+</style>
