@@ -88,6 +88,11 @@ from world_seek.env import (
     GLOBAL_LOG_LEVEL,
     BYPASS_MODEL_ACCESS_CONTROL,
     ENABLE_REALTIME_CHAT_SAVE,
+    WEBUI_AUTH_COOKIE_SAME_SITE,
+    WEBUI_AUTH_COOKIE_SECURE,
+    WEBUI_SESSION_COOKIE_SAME_SITE,
+    WEBUI_SESSION_COOKIE_SECURE,
+    AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION,
 )
 from world_seek.constants import TASKS
 
@@ -181,58 +186,116 @@ async def chat_completion_tools_handler(
                 nonlocal skip_files
 
                 log.debug(f"{tool_call=}")
+                
+                # 日志：记录工具调用的开始和详细参数
+                start_time = time.time()
+                log.info(f"开始工具调用: 时间={start_time}, 工具调用详情={json.dumps(tool_call, ensure_ascii=False)}")
 
                 tool_function_name = tool_call.get("name", None)
                 if tool_function_name not in tools:
+                    log.warning(f"工具未找到: {tool_function_name}")
                     return body, {}
 
                 tool_function_params = tool_call.get("parameters", {})
+                log.info(f"工具参数: 名称={tool_function_name}, 参数={json.dumps(tool_function_params, ensure_ascii=False)}")
 
                 try:
                     tool = tools[tool_function_name]
 
                     spec = tool.get("spec", {})
                     allowed_params = (
-                        spec.get("parameters", {}).get("properties", {}).keys()
+                        spec.get("parameters", {})
+                        .get("properties", {})
+                        .keys()
                     )
-                    tool_function_params = {
+                    filtered_params = {
                         k: v
                         for k, v in tool_function_params.items()
                         if k in allowed_params
                     }
+                    
+                    # 记录过滤后的参数
+                    log.info(f"过滤后的工具参数: {json.dumps(filtered_params, ensure_ascii=False)}")
+                    # 记录被过滤掉的参数
+                    removed_params = set(tool_function_params.keys()) - set(filtered_params.keys())
+                    if removed_params:
+                        log.warning(f"被过滤的参数: {removed_params}")
+                    
+                    tool_function_params = filtered_params
 
                     if tool.get("direct", False):
-                        tool_result = await event_caller(
-                            {
-                                "type": "execute:tool",
-                                "data": {
-                                    "id": str(uuid4()),
-                                    "name": tool_function_name,
-                                    "params": tool_function_params,
-                                    "server": tool.get("server", {}),
-                                    "session_id": metadata.get("session_id", None),
-                                },
-                            }
-                        )
+                        log.info(f"执行直接工具: {tool_function_name}, 超时设置={AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION}秒")
+                        execution_start = time.time()
+                        try:
+                            tool_result = await asyncio.wait_for(
+                                event_caller(
+                                    {
+                                        "type": "execute:tool",
+                                        "data": {
+                                            "id": str(uuid4()),
+                                            "name": tool_function_name,
+                                            "params": tool_function_params,
+                                            "server": tool.get("server", {}),
+                                            "session_id": metadata.get(
+                                                "session_id", None
+                                            ),
+                                        },
+                                    }
+                                ),
+                                timeout=AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION
+                            )
+                            execution_time = time.time() - execution_start
+                            log.info(f"直接工具执行完成: {tool_function_name}, 耗时={execution_time:.2f}秒 ({execution_time/AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION*100:.1f}% 的超时限制)")
+                        except asyncio.TimeoutError:
+                            execution_time = time.time() - execution_start
+                            log.warning(f"直接工具执行超时: {tool_function_name}, 已执行时间={execution_time:.2f}秒, 超时设置={AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION}秒")
+                            tool_result = f"工具执行超时。工具 '{tool_function_name}' 执行时间超过 {AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION} 秒。请尝试简化操作或联系管理员调整超时设置。"
                     else:
                         tool_function = tool["callable"]
-                        tool_result = await tool_function(**tool_function_params)
+                        log.info(f"执行可调用工具: {tool_function_name}, 超时设置={AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION}秒")
+                        execution_start = time.time()
+                        try:
+                            tool_result = await asyncio.wait_for(
+                                tool_function(**tool_function_params),
+                                timeout=AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION
+                            )
+                            execution_time = time.time() - execution_start
+                            log.info(f"可调用工具执行完成: {tool_function_name}, 耗时={execution_time:.2f}秒 ({execution_time/AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION*100:.1f}% 的超时限制)")
+                        except asyncio.TimeoutError:
+                            execution_time = time.time() - execution_start
+                            log.warning(f"可调用工具执行超时: {tool_function_name}, 已执行时间={execution_time:.2f}秒, 超时设置={AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION}秒")
+                            tool_result = f"工具执行超时。工具 '{tool_function_name}' 执行时间超过 {AIOHTTP_CLIENT_TIMEOUT_TOOL_EXECUTION} 秒。请尝试简化操作或联系管理员调整超时设置。"
 
                 except Exception as e:
+                    log.exception(f"Error executing tool {tool_function_name}: {str(e)}")
                     tool_result = str(e)
 
+                # 记录工具结果的类型和大小
+                log.info(f"工具执行结果类型: {type(tool_result).__name__}")
+                
                 tool_result_files = []
                 if isinstance(tool_result, list):
-                    for item in tool_result:
+                    log.info(f"列表结果大小: {len(tool_result)} 项")
+                    for idx, item in enumerate(tool_result):
                         # check if string
                         if isinstance(item, str) and item.startswith("data:"):
                             tool_result_files.append(item)
                             tool_result.remove(item)
+                            log.info(f"从结果中移除数据URL，列表位置 {idx}")
 
-                if isinstance(tool_result, dict) or isinstance(tool_result, list):
+                if isinstance(tool_result, dict):
+                    log.info(f"字典结果大小: {len(tool_result)} 个键")
+                    tool_result = json.dumps(tool_result, indent=2)
+                elif isinstance(tool_result, list):
+                    log.info(f"列表结果最终大小: {len(tool_result)} 项")
                     tool_result = json.dumps(tool_result, indent=2)
 
                 if isinstance(tool_result, str):
+                    result_length = len(tool_result)
+                    log.info(f"字符串结果大小: {result_length} 字符")
+                    if result_length > 1000:
+                        log.info(f"结果预览: {tool_result[:500]}...{tool_result[-500:]}")
+                    
                     tool = tools[tool_function_name]
                     tool_id = tool.get("tool_id", "")
 
@@ -245,6 +308,7 @@ async def chat_completion_tools_handler(
                         "direct", False
                     ):
                         # Citation is enabled for this tool
+                        log.info(f"启用引用: {tool_name}")
                         sources.append(
                             {
                                 "source": {
@@ -256,6 +320,7 @@ async def chat_completion_tools_handler(
                         )
                     else:
                         # Citation is not enabled for this tool
+                        log.info(f"未启用引用，将结果作为用户消息添加: {tool_name}")
                         body["messages"] = add_or_update_user_message(
                             f"\nTool `{tool_name}` Output: {tool_result}",
                             body["messages"],
@@ -266,13 +331,19 @@ async def chat_completion_tools_handler(
                         .get("metadata", {})
                         .get("file_handler", False)
                     ):
+                        log.info(f"跳过文件处理: {tool_name}")
                         skip_files = True
+                
+                total_time = time.time() - start_time
+                log.info(f"工具调用完成: {tool_function_name}, 总耗时={total_time:.2f}秒")
 
             # check if "tool_calls" in result
             if result.get("tool_calls"):
+                log.info(f"处理多个工具调用: {len(result.get('tool_calls'))} 个调用")
                 for tool_call in result.get("tool_calls"):
                     await tool_call_handler(tool_call)
             else:
+                log.info("处理单个工具调用")
                 await tool_call_handler(result)
 
         except Exception as e:

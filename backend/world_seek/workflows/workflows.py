@@ -30,6 +30,11 @@ log.setLevel(SRC_LOG_LEVELS["AGENTS"])
 # WorkflowParams is a model for the data stored in the params field of the Workflow table
 class WorkflowParams(BaseModel):
     model_config = ConfigDict(extra="allow")
+    
+    langflow_url: Optional[str] = None
+    api_path: Optional[str] = "https://api.langflow.astra.datastax.com/lf/8f511d42-9db1-41c8-84cb-bd19dbd841f2/api/v1/run/"
+    workflow_data: Optional[dict] = None
+    # 其他参数
     pass
 
 
@@ -55,6 +60,16 @@ class Workflow(Base):
         Holds a JSON encoded blob of parameters, see `ModelParams`.
     """
 
+    app_token = Column(Text)
+    """
+        The app token of the workflow.
+    """
+
+    api_path = Column(Text)
+    """
+        The api path of the workflow.
+    """
+
     is_deleted = Column(Boolean, default=False)
 
     updated_at = Column(BigInteger)
@@ -67,12 +82,32 @@ class WorkflowModel(BaseModel):
     name: str
     description: str
     params: Optional[dict] = None
+    api_path: Optional[str] = ""
+    app_token: Optional[str] = ""
 
     is_deleted: bool
     updated_at: int  # timestamp in epoch
     created_at: int  # timestamp in epoch
 
     model_config = ConfigDict(from_attributes=True)
+    
+    @classmethod
+    def model_validate_workflow(cls, obj, *args, **kwargs):
+        """
+        自定义模型验证方法，确保api_path和app_token字段被正确设置
+        """
+        # 首先使用标准验证
+        validated_data = cls.model_validate(obj, *args, **kwargs)
+        
+        # 检查api_path是否存在，如果不存在，尝试从params中获取
+        if not validated_data.api_path and validated_data.params and isinstance(validated_data.params, dict):
+            validated_data.api_path = validated_data.params.get('api_path', "")
+        
+        # 检查app_token是否存在，如果不存在，尝试从params中获取
+        if not validated_data.app_token and validated_data.params and isinstance(validated_data.params, dict):
+            validated_data.app_token = validated_data.params.get('app_token', "")
+        
+        return validated_data
 
 
 ####################
@@ -89,6 +124,8 @@ class WorkflowForm(BaseModel):
     description: str
     is_deleted: bool = False
     params: Optional[dict] = None
+    api_path: Optional[str] = ""
+    app_token: Optional[str] = ""
 
 class ModelsTable:
     def insert_new_workflow(
@@ -109,7 +146,7 @@ class ModelsTable:
                 db.refresh(result)
 
                 if result:
-                    return WorkflowModel.model_validate(result)
+                    return WorkflowModel.model_validate_workflow(result)
                 else:
                     return None
         except Exception as e:
@@ -118,7 +155,7 @@ class ModelsTable:
 
     def get_all_workflows(self) -> list[WorkflowModel]:
         with get_db() as db:
-            return [WorkflowModel.model_validate(model) for model in db.query(Workflow).all()]
+            return [WorkflowModel.model_validate_workflow(model) for model in db.query(Workflow).all()]
 
     def get_workflows(self, user_id: str = None, user_role: str = None) -> list[WorkflowResponse]:
         try:
@@ -134,8 +171,12 @@ class ModelsTable:
 
                         # 安全地验证模型
                         try:
-                            workflow_model = WorkflowModel.model_validate(workflow)
+                            workflow_model = WorkflowModel.model_validate_workflow(workflow)
                             workflow_data = workflow_model.model_dump()
+                            
+                            # 移除敏感字段
+                            workflow_data.pop('api_path', None)
+                            workflow_data.pop('app_token', None)
                             
                             # 构建响应对象
                             response_data = {
@@ -161,18 +202,17 @@ class ModelsTable:
             # 返回空列表而不是抛出异常
             return []
 
-    def get_base_workflows(self) -> list[WorkflowModel]:
-        with get_db() as db:
-            return [
-                WorkflowModel.model_validate(workflow)
-                for workflow in db.query(Workflow).filter(Workflow.base_app_id == None).all()
-            ]
-
     def get_workflow_by_id(self, id: str) -> Optional[WorkflowModel]:
         try:
             with get_db() as db:
                 workflow = db.get(Workflow, id)
-                return WorkflowModel.model_validate(workflow)
+                if not workflow:
+                    return None
+                    
+                # 创建工作流模型对象
+                workflow_model = WorkflowModel.model_validate_workflow(workflow)
+                
+                return workflow_model
         except Exception:
             return None
 
@@ -210,7 +250,7 @@ class ModelsTable:
                 print(f"update_workflow_by_id result: {result}")
                 workflow = db.get(Workflow, id)
                 db.refresh(workflow)
-                return WorkflowModel.model_validate(workflow)
+                return WorkflowModel.model_validate_workflow(workflow)
         except Exception as e:
             log.exception(f"Failed to update the workflow by id {id}: {e}")
             return None

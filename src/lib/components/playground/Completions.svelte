@@ -7,6 +7,7 @@
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, models, settings, showSidebar } from '$lib/stores';
 	import { chatCompletion } from '$lib/apis/openai';
+	import { runLangflowWorkflow } from '$lib/apis/chats';
 
 	import { splitStream } from '$lib/utils';
 	import Selector from '$lib/components/chat/ModelSelector/Selector.svelte';
@@ -37,60 +38,109 @@
 		console.log('stopResponse');
 	};
 
+	const handleLangflowStream = async (res) => {
+		if (!res || !res.body) {
+			console.error('Invalid response from Langflow streaming API');
+			return;
+		}
+
+		const reader = res.body.getReader();
+		const decoder = new TextDecoder('utf-8');
+		let streamContent = '';
+
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value, { stream: true });
+				const lines = chunk.split('\n');
+
+				for (const line of lines) {
+					if (line.startsWith('data:')) {
+						const data = line.slice(5).trim();
+						if (data === '[DONE]') continue;
+
+						try {
+							const jsonData = JSON.parse(data);
+							
+							// 检查错误
+							if (jsonData.error) {
+								console.error('Langflow stream error:', jsonData.error);
+								toast.error(`Error: ${jsonData.error.detail || 'Error in Langflow stream'}`);
+								continue;
+							}
+
+							// 从不同格式中提取内容
+							let messageContent = '';
+							if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+								// OpenAI格式
+								messageContent = jsonData.choices[0].delta.content;
+							} else if (jsonData.text) {
+								// 纯文本格式
+								messageContent = jsonData.text;
+							} else if (jsonData.response) {
+								// Langflow特定格式
+								messageContent = jsonData.response;
+							}
+
+							if (messageContent) {
+								streamContent += messageContent;
+								text += messageContent;
+								await tick();
+								scrollToBottom();
+							}
+						} catch (e) {
+							console.error('Error parsing JSON from stream:', e, data);
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Error reading stream:', error);
+			toast.error(`Stream error: ${error.message}`);
+		}
+		
+		return streamContent;
+	};
+
 	const textCompletionHandler = async () => {
 		const model = $models.find((model) => model.id === selectedModelId);
+		if (!model) {
+			toast.error('选择的模型不存在');
+			return;
+		}
 
-		const [res, controller] = await chatCompletion(
-			localStorage.token,
-			{
-				model: model.id,
-				stream: true,
-				messages: [
+		try {
+			const useStream = true; // 默认使用流式响应
+			const res = await runLangflowWorkflow(
+				localStorage.token,
+				model.base_app_id,
+				[
 					{
 						role: 'assistant',
 						content: text
 					}
-				]
-			},
-			`${WEBUI_BASE_URL}/api`
-		);
-
-		if (res && res.ok) {
-			const reader = res.body
-				.pipeThrough(new TextDecoderStream())
-				.pipeThrough(splitStream('\n'))
-				.getReader();
-
-			while (true) {
-				const { value, done } = await reader.read();
-				if (done || stopResponseFlag) {
-					if (stopResponseFlag) {
-						controller.abort('User: Stop Response');
-					}
-					break;
+				],
+				{
+					stream: useStream
 				}
+			);
 
-				try {
-					let lines = value.split('\n');
-
-					for (const line of lines) {
-						if (line !== '') {
-							if (line.includes('[DONE]')) {
-								console.log('done');
-							} else {
-								let data = JSON.parse(line.replace(/^data: /, ''));
-								console.log(data);
-
-								text += data.choices[0].delta.content ?? '';
-							}
-						}
-					}
-				} catch (error) {
-					console.log(error);
+			if (res) {
+				if (useStream && res.body) {
+					// 处理流式响应
+					await handleLangflowStream(res);
+				} else if (res.error) {
+					toast.error(`Error: ${res.error}`);
+				} else {
+					text += res.response || '';
+					scrollToBottom();
 				}
-
-				scrollToBottom();
 			}
+		} catch (error) {
+			console.error(error);
+			toast.error(`${error}`);
 		}
 	};
 
