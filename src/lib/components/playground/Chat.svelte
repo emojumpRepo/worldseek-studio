@@ -188,7 +188,7 @@
 			const useStream = true; // 默认使用流式响应
 			const res = await runLangflowWorkflow(
 				localStorage.token,
-				model.  ,
+				model.id,
 				messageList,
 				{
 					stream: useStream
