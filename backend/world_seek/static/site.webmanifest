@@ -1,6 +1,6 @@
 {
-  "name": "WORLDSEEK",
-  "short_name": "WS",
+  "name": "WorldSeek",
+  "short_name": "worldseek",
   "icons": [
     {
       "src": "/static/web-app-manifest-192x192.png",
