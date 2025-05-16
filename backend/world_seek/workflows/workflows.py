@@ -32,7 +32,7 @@ class WorkflowParams(BaseModel):
     model_config = ConfigDict(extra="allow")
     
     langflow_url: Optional[str] = None
-    api_path: Optional[str] = "https://api.langflow.astra.datastax.com/lf/8f511d42-9db1-41c8-84cb-bd19dbd841f2/api/v1/run/"
+    api_path: Optional[str] = "http://8.130.43.71:7860/api/v1/run/daf471a8-cb78-4d0f-b0b7-8ad75a012652"
     workflow_data: Optional[dict] = None
     # 其他参数
     pass
@@ -104,8 +104,8 @@ class WorkflowModel(BaseModel):
             validated_data.api_path = validated_data.params.get('api_path', "")
         
         # 检查app_token是否存在，如果不存在，尝试从params中获取
-        if not validated_data.app_token and validated_data.params and isinstance(validated_data.params, dict):
-            validated_data.app_token = validated_data.params.get('app_token', "")
+        # if not validated_data.app_token and validated_data.params and isinstance(validated_data.params, dict):
+        #     validated_data.app_token = validated_data.params.get('app_token', "")
         
         return validated_data
 

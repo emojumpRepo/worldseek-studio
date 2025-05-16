@@ -80,7 +80,8 @@
 
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder('utf-8');
-		let content = responseMessage.content || '';
+		let accumulatedContent = responseMessage.content || ''; // 用于累积完整内容
+		let receivedCompleteResponse = false; // 标记是否收到了完整响应
 
 		try {
 			while (true) {
@@ -104,6 +105,19 @@
 								responseMessage.content = `Error: ${jsonData.error.detail || 'Error in Langflow stream'}`;
 								continue;
 							}
+							
+							// 处理完整响应消息
+							if (jsonData.id === 'langflow-complete' && jsonData.complete === true) {
+								console.log('收到完整响应内容，长度：', jsonData.content.length);
+								// 如果后端提供了完整内容，则使用后端的完整内容
+								if (jsonData.content && jsonData.content.length > 0) {
+									accumulatedContent = jsonData.content;
+									responseMessage.content = accumulatedContent;
+									messages = messages;
+									receivedCompleteResponse = true;
+								}
+								continue;
+							}
 
 							// 从不同格式中提取内容
 							let messageContent = '';
@@ -119,9 +133,8 @@
 							}
 
 							if (messageContent) {
-								content += messageContent;
-								responseMessage.content = content;
-								// 在这里更新显示内容
+								accumulatedContent += messageContent; // 累积完整内容
+								responseMessage.content = accumulatedContent; // 更新显示内容
 								messages = messages;
 								await tick();
 								const textareaElement = document.getElementById(`assistant-${messages.length - 1}-textarea`);
@@ -140,6 +153,16 @@
 			console.error('Error reading stream:', error);
 			responseMessage.content = `Stream error: ${error.message}`;
 		} finally {
+			// 确保最终内容被保存
+			responseMessage.content = accumulatedContent;
+			
+			// 如果收到了完整响应，记录日志
+			if (receivedCompleteResponse) {
+				console.log('流式响应完成，使用后端提供的完整内容');
+			} else {
+				console.log('流式响应完成，使用前端累积的内容');
+			}
+			
 			messages = messages;
 			await tick();
 			scrollToBottom();

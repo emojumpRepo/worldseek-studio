@@ -183,12 +183,32 @@ async def run_workflow(
     start_time = time.time()
     workflow_id = form_data.get("workflow_id")
     
-    log.info(f"开始执行工作流: ID={workflow_id}, 用户={user.id}, 时间={start_time}")
+    log.info(f"执行工作流: ID={workflow_id}, 用户={user.id}")
     
-    # 记录消息数量和类型
+    # 获取最新的消息内容
+    latest_message = ""
     messages = form_data.get("messages", [])
-    message_count = len(messages)
-    log.info(f"工作流请求消息: 数量={message_count}")
+    log.info(f"消息记录messages: {messages}")
+    
+    # 从消息列表中找到最后一个role为"user"的消息
+    if messages and isinstance(messages, list):
+        # 从后向前遍历，找到第一个role为user的消息
+        for msg in reversed(messages):
+            if isinstance(msg, dict) and msg.get("role") == "user" and "content" in msg:
+                latest_message_obj = msg
+                latest_message = msg["content"]
+                log.info(f"找到最新用户消息: {latest_message_obj}")
+                break
+    
+    # 检查最新消息是否为空，如果为空直接返回错误
+    if not latest_message or latest_message.strip() == "":
+        log.warning(f"工作流请求无有效用户消息: ID={workflow_id}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未找到有效的用户消息",
+        )
+    
+    log.info(f"用户消息内容: {latest_message[:50]}...")
     
     # 获取工作流
     workflow = Workflows.get_workflow_by_id(workflow_id)
@@ -200,24 +220,25 @@ async def run_workflow(
         )
 
     try:
-        # 使用对象属性访问方式
-        log.info(f"找到工作流: ID={workflow_id}, 名称={workflow.name}")
-        log.info(f"工作流: {workflow}")
-        log.info(f"工作流API路径: {workflow.api_path}")
-        log.info(f"工作流App Token: {workflow.app_token}")
+        # 简化的工作流日志
+        log.info(f"工作流信息: ID={workflow_id}, 名称={workflow.name}")
         
-        base_url = "https://api.langflow.astra.datastax.com/lf/8f511d42-9db1-41c8-84cb-bd19dbd841f2/api/v1/run/"
+        # 准备API完整URL - 直接使用workflow.api_path作为完整URL
+        api_url = workflow.api_path
         
-        # 直接从workflow对象获取api_path
-        api_path = workflow.api_path
-        if not api_path:
-            log.error(f"工作流API路径未配置: ID={workflow_id}")
+        # 检查API路径格式 - 如果不是完整URL，则构建完整URL
+        if not api_url:
+            log.error(f"API路径未配置: ID={workflow_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Langflow API path not configured for this workflow",
             )
         
-        log.info(f"工作流API路径: {api_path}")
+        # 如果api_url不以http开头，则添加基础URL
+        if not api_url.startswith(('http://', 'https://')):
+            api_url = f"http://8.130.43.71:7860/api/v1/run/{api_url}"
+        
+        log.info(f"完整API URL: {api_url}")
         
         # 获取App Token (同样直接从workflow对象获取)
         app_token = workflow.app_token
@@ -225,63 +246,44 @@ async def run_workflow(
             # 尝试从params中获取（可选的备选方案）
             if hasattr(workflow, 'params') and workflow.params and "app_token" in workflow.params:
                 app_token = workflow.params.get("app_token")
-            
-            if not app_token:
-                log.error(f"工作流App Token未配置: ID={workflow_id}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="App Token not configured for this workflow",
-                )
-        
-        # 不记录完整token，只记录长度和前几个字符用于调试
-        token_prefix = app_token[:4] if len(app_token) > 4 else ""
-        log.info(f"工作流Token: 长度={len(app_token)}, 前缀={token_prefix}***")
         
         # 获取参数
         params = form_data.get("params", {})
         stream = params.get("stream", False)
         
-        log.info(f"工作流执行参数: stream={stream}, params={params}")
+        # 设置较长的超时时间
+        timeout = params.get("timeout", 180)  # 默认3分钟
         
         # 准备发送给Langflow的数据
         langflow_data = {
-            "input_value": messages,
+            "input_value": latest_message,
             "input_type": "chat",
             "output_type": "chat",
         }
         
-        log.info(f"准备调用Langflow API: base_url={base_url}, data长度={len(str(langflow_data))}")
-        
         # 调用Langflow API (支持流式响应)
         try:
             api_call_start = time.time()
-            log.info(f"开始调用Langflow API: 时间={api_call_start}")
+            log.info(f"调用Langflow API: URL={api_url}, 流式={stream}, 超时={timeout}秒")
             
-            result = await call_langflow_api(base_url, api_path, app_token, langflow_data, stream=stream)
+            # 直接调用API，使用完整URL - 设置为空的base_url和api_url作为path
+            result = await call_langflow_api("", api_url, app_token, langflow_data, stream=stream, timeout=timeout)
             
             api_call_end = time.time()
             api_call_duration = api_call_end - api_call_start
             
-            if stream:
-                log.info(f"Langflow API流式调用成功: 响应类型=StreamingResponse, 耗时={api_call_duration:.2f}秒")
-            else:
-                # 记录响应大小
-                result_size = len(str(result))
-                log.info(f"Langflow API调用成功: 响应大小={result_size}字节, 耗时={api_call_duration:.2f}秒")
-            
-            total_time = time.time() - start_time
-            log.info(f"工作流执行完成: ID={workflow_id}, 总耗时={total_time:.2f}秒")
+            log.info(f"API调用成功: 耗时={api_call_duration:.2f}秒")
             
             return result
         except Exception as e:
             error_time = time.time()
             error_duration = error_time - start_time
-            log.error(f"Langflow API调用失败: ID={workflow_id}, 错误={str(e)}, 已执行时间={error_duration:.2f}秒")
+            log.error(f"API调用失败: {str(e)}, 耗时={error_duration:.2f}秒")
             
             # 检查是否是超时错误
             import asyncio
             if isinstance(e, asyncio.TimeoutError) or "timeout" in str(e).lower():
-                log.error(f"工作流执行超时: ID={workflow_id}, 已执行时间={error_duration:.2f}秒")
+                log.error(f"API调用超时: 已用时间={error_duration:.2f}秒")
             
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -289,7 +291,7 @@ async def run_workflow(
             )
     except Exception as e:
         # 添加对工作流处理过程中的异常捕获
-        log.exception(f"工作流处理过程异常: ID={workflow_id}, 错误类型={type(e).__name__}, 错误={str(e)}")
+        log.exception(f"工作流处理异常: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Workflow processing error: {str(e)}",
