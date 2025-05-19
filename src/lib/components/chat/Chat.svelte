@@ -1616,13 +1616,9 @@
 
 	const handleLangflowError = async (error, responseMessage) => {
 		let errorMessage = '';
-		let innerError;
+		let innerError = error;
 
-		if (error) {
-			innerError = error;
-		}
-
-		console.error(innerError);
+		console.error('Langflow error:', innerError);
 		if ('detail' in innerError) {
 			// FastAPI error
 			toast.error(innerError.detail);
@@ -1653,30 +1649,21 @@
 
 	const handleOpenAIError = async (error, responseMessage) => {
 		let errorMessage = '';
-		let innerError;
+		let innerError = error;
 
-		if (error) {
-			innerError = error;
-		}
-
-		console.error(innerError);
+		console.error('OpenAI error:', innerError);
 		if ('detail' in innerError) {
 			// FastAPI error
 			toast.error(innerError.detail);
 			errorMessage = innerError.detail;
-		} else if ('error' in innerError) {
-			// OpenAI error
-			if ('message' in innerError.error) {
-				toast.error(innerError.error.message);
-				errorMessage = innerError.error.message;
-			} else {
-				toast.error(innerError.error);
-				errorMessage = innerError.error;
-			}
-		} else if ('message' in innerError) {
-			// OpenAI error
-			toast.error(innerError.message);
-			errorMessage = innerError.message;
+		} else if (typeof innerError === 'string') {
+			// String error
+			toast.error(innerError);
+			errorMessage = innerError;
+		} else {
+			// 其他错误类型
+			toast.error(String(innerError));
+			errorMessage = String(innerError);
 		}
 
 		responseMessage.error = {
@@ -2011,6 +1998,7 @@
 						console.error('解析JSON数据失败:', e, '原始数据:', data);
 					}
 				}
+
 			}
 			
 			// 流式完成后记录日志
