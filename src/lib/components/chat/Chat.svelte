@@ -2,6 +2,7 @@
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
 	import mermaid from 'mermaid';
+	import { marked } from 'marked';
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
 
 	import { getContext, onDestroy, onMount, tick } from 'svelte';
@@ -140,6 +141,12 @@
 	let files = [];
 	let params = {};
 
+	// 初始化marked配置
+	marked.setOptions({
+		breaks: true,
+		gfm: true
+	});
+
 	$: if (chatIdProp) {
 		(async () => {
 			loading = true;
@@ -157,14 +164,18 @@
 
 				if (localStorage.getItem(`chat-input-${chatIdProp}`)) {
 					try {
-						const input = JSON.parse(localStorage.getItem(`chat-input-${chatIdProp}`));
-
-						prompt = input.prompt;
-						files = input.files;
-						selectedToolIds = input.selectedToolIds;
-						webSearchEnabled = input.webSearchEnabled;
-						imageGenerationEnabled = input.imageGenerationEnabled;
-					} catch (e) {}
+						const inputStr = localStorage.getItem(`chat-input-${chatIdProp}`);
+						if (inputStr) {
+							const input = JSON.parse(inputStr);
+							prompt = input.prompt;
+							files = input.files;
+							selectedToolIds = input.selectedToolIds;
+							webSearchEnabled = input.webSearchEnabled;
+							imageGenerationEnabled = input.imageGenerationEnabled;
+						}
+					} catch (e) {
+						// 解析出错，清空输入
+					}
 				}
 
 				window.setTimeout(() => scrollToBottom(), 0);
@@ -267,10 +278,13 @@
 					chatCompletionEventHandler(data, message, event.chat_id);
 				} else if (type === 'chat:message:delta' || type === 'message') {
 					message.content += data.content;
+					await saveChatHandler($chatId, history);
 				} else if (type === 'chat:message' || type === 'replace') {
 					message.content = data.content;
+					await saveChatHandler($chatId, history);
 				} else if (type === 'chat:message:files' || type === 'files') {
 					message.files = data.files;
+					await saveChatHandler($chatId, history);
 				} else if (type === 'chat:title') {
 					chatTitle.set(data);
 					currentChatPage.set(1);
@@ -417,18 +431,17 @@
 
 		if (localStorage.getItem(`chat-input-${chatIdProp}`)) {
 			try {
-				const input = JSON.parse(localStorage.getItem(`chat-input-${chatIdProp}`));
-				prompt = input.prompt;
-				files = input.files;
-				selectedToolIds = input.selectedToolIds;
-				webSearchEnabled = input.webSearchEnabled;
-				imageGenerationEnabled = input.imageGenerationEnabled;
+				const inputStr = localStorage.getItem(`chat-input-${chatIdProp}`);
+				if (inputStr) {
+					const input = JSON.parse(inputStr);
+					prompt = input.prompt;
+					files = input.files;
+					selectedToolIds = input.selectedToolIds;
+					webSearchEnabled = input.webSearchEnabled;
+					imageGenerationEnabled = input.imageGenerationEnabled;
+				}
 			} catch (e) {
-				prompt = '';
-				files = [];
-				selectedToolIds = [];
-				webSearchEnabled = false;
-				imageGenerationEnabled = false;
+				// 解析出错，清空输入
 			}
 		}
 
@@ -1490,8 +1503,20 @@
 		socket = null,
 		event = null
 	) => {
+		// 确保responseMessageId存在
+		if (!responseMessageId || !_history?.messages?.[responseMessageId]) {
+			console.error('Invalid responseMessageId or missing message object:', responseMessageId);
+			return;
+		}
+
 		const responseMessage = _history.messages[responseMessageId];
-		const userMessage = _history.messages[responseMessage.parentId];
+		const userMessage = responseMessage.parentId ? _history.messages[responseMessage.parentId] : null;
+
+		// 确保用户消息存在
+		if (!userMessage) {
+			console.error('Missing parent user message for response:', responseMessageId);
+			return;
+		}
 
 		let files = JSON.parse(JSON.stringify(chatFiles));
 		files.push(
@@ -1507,6 +1532,13 @@
 		);
 
 		scrollToBottom();
+		
+		// 先设置加载状态
+		responseMessage.loading = true;
+		history.messages[responseMessageId] = responseMessage;
+		await tick();
+		
+		// 然后通知事件
 		eventTarget.dispatchEvent(
 			new CustomEvent('chat:start', {
 				detail: {
@@ -1514,56 +1546,72 @@
 				}
 			})
 		);
-		await tick();
 
 		const useStream = $settings?.langflowStreamEnabled ?? true;
-		const res = await runLangflowWorkflow(
-			localStorage.token,
-			model.base_app_id,
-			createMessagesList(_history, responseMessageId).map((message) => ({
-				role: message.role,
-				content: message.content
-			})),
-			{
-				stream: useStream,
-				session_id: history.id
-			}
-		).catch(async (error) => {
-			toast.error(`${error}`);
-
-			responseMessage.error = {
-				content: error
-			};
-			responseMessage.done = true;
-
-			history.messages[responseMessageId] = responseMessage;
-			history.currentId = responseMessageId;
-			return null;
-		});
-
-		if (res) {
-			if (useStream && res.body) {
-				// 处理流式响应
-				await handleLangflowStream(res, responseMessage);
-			} else if (res.error) {
-				// 处理错误响应
-				await handleLangflowError(res.error, responseMessage);
-			} else {
-				// 处理非流式响应
-				responseMessage.content = res.response || '';
-				responseMessage.done = true;
-				history.messages[responseMessageId] = responseMessage;
-				
-				if (taskIds) {
-					taskIds.push(res.task_id);
-				} else if (res.task_id) {
-					taskIds = [res.task_id];
+		try {
+			const res = await runLangflowWorkflow(
+				localStorage.token,
+				model.base_app_id,
+				createMessagesList(_history, responseMessageId).map((message) => ({
+					role: message.role,
+					content: message.content
+				})),
+				{
+					stream: useStream,
+					session_id: history.id
 				}
-			}
-		}
+			);
 
-		await tick();
-		scrollToBottom();
+			if (res) {
+				if (useStream && res.body) {
+					// 处理流式响应
+					await handleLangflowStream(res, responseMessage);
+				} else if (res.error) {
+					// 处理错误响应
+					await handleLangflowError(res.error, responseMessage);
+				} else {
+					// 处理非流式响应
+					responseMessage.content = res.response || '';
+					responseMessage.done = true;
+					history.messages[responseMessageId] = responseMessage;
+					
+					if (taskIds) {
+						taskIds.push(res.task_id);
+					} else if (res.task_id) {
+						taskIds = [res.task_id];
+					}
+				}
+			} else {
+				// 处理空响应情况
+				console.error('Empty response from Langflow API');
+				responseMessage.error = {
+					content: $i18n.t('Empty response from workflow')
+				};
+			}
+		} catch (error) {
+			console.error('Error in sendPromptSocket:', error);
+			toast.error(`${error}`);
+			responseMessage.error = {
+				content: String(error)
+			};
+		} finally {
+			// 确保消息状态被正确设置
+			responseMessage.done = true;
+			responseMessage.loading = false;
+			
+			// 确保更新history中的消息对象
+			if (history && history.messages) {
+				history.messages[responseMessageId] = responseMessage;
+			}
+			
+			// 在流式响应完成后保存到数据库
+			if (!$temporaryChatEnabled) {
+				await saveChatHandler($chatId, history);
+			}
+			
+			await tick();
+			if (autoScroll) scrollToBottom();
+		}
 	};
 
 	const handleLangflowError = async (error, responseMessage) => {
@@ -1849,93 +1897,154 @@
 
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder('utf-8');
-		let accumulatedContent = responseMessage.content || ''; // 用于累积完整内容
-		let receivedCompleteResponse = false; // 标记是否收到了完整响应
+		let accumulatedContent = responseMessage?.content || '';
+		let receivedCompleteResponse = false;
 
 		try {
+			// 确保responseMessage对象存在且有id
+			if (responseMessage && responseMessage.id) {
+				responseMessage.loading = true;
+				if (history && history.messages) {
+					history.messages[responseMessage.id] = responseMessage;
+					await tick();
+				}
+			} else {
+				console.error('Invalid responseMessage object:', responseMessage);
+				return;
+			}
+			
+			console.log('开始处理流式响应');
 			while (true) {
 				const { done, value } = await reader.read();
-				if (done) break;
+				if (done) {
+					console.log('流式响应结束');
+					break;
+				}
 
 				const chunk = decoder.decode(value, { stream: true });
+				console.log('收到原始数据块:', chunk);
+				
 				const lines = chunk.split('\n');
+				console.log('分割后的行数:', lines.length);
 
 				for (const line of lines) {
-					if (line.startsWith('data:')) {
-						const data = line.slice(5).trim();
-						if (data === '[DONE]') continue;
+					if (!line.startsWith('data:')) {
+						console.log('跳过非data前缀行:', line);
+						continue;
+					}
 
-						try {
-							const jsonData = JSON.parse(data);
-							
-							// 检查错误
-							if (jsonData.error) {
-								console.error('Langflow stream error:', jsonData.error);
-								responseMessage.error = {
-									content: jsonData.error.detail || 'Error in Langflow stream'
-								};
-								continue;
-							}
-							
-							// 处理完整响应消息
-							if (jsonData.id === 'langflow-complete' && jsonData.complete === true) {
-								console.log('收到完整响应内容，长度：', jsonData.content.length);
-								// 如果后端提供了完整内容，则使用后端的完整内容
-								if (jsonData.content && jsonData.content.length > 0) {
-									accumulatedContent = jsonData.content;
-									responseMessage.content = accumulatedContent;
-									history.messages[responseMessage.id] = responseMessage;
-									receivedCompleteResponse = true;
-								}
-								continue;
-							}
+					const data = line.slice(5).trim();
+					if (data === '[DONE]') {
+						console.log('收到[DONE]标记');
+						continue;
+					}
 
-							// 从不同格式中提取内容
-							let messageContent = '';
-							if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
-								// OpenAI格式
-								messageContent = jsonData.choices[0].delta.content;
-							} else if (jsonData.text) {
-								// 纯文本格式
-								messageContent = jsonData.text;
-							} else if (jsonData.response) {
-								// Langflow特定格式
-								messageContent = jsonData.response;
-							}
-
-							if (messageContent) {
-								accumulatedContent += messageContent; // 累积完整内容
-								responseMessage.content = accumulatedContent; // 更新显示内容
+					try {
+						const jsonData = JSON.parse(data);
+						console.log('解析后的JSON数据:', jsonData);
+						
+						// 检查错误
+						if (jsonData.error) {
+							console.error('Langflow stream error:', jsonData.error);
+							responseMessage.error = {
+								content: jsonData.error.detail || 'Error in Langflow stream'
+							};
+							continue;
+						}
+						
+						// 处理token事件格式
+						if (jsonData.event === 'token' && jsonData.data) {
+							const tokenContent = jsonData.data.chunk || '';
+							if (tokenContent) {
+								console.log('收到token内容:', tokenContent);
+								accumulatedContent += tokenContent;
+								responseMessage.content = accumulatedContent;
 								history.messages[responseMessage.id] = responseMessage;
 								await tick();
-								scrollToBottom();
+								if (autoScroll) scrollToBottom();
 							}
-						} catch (e) {
-							console.error('Error parsing JSON from stream:', e, data);
+							continue;
 						}
+						
+						// 处理完整响应消息
+						if (jsonData.id === 'langflow-complete' && jsonData.complete === true) {
+							console.log('收到完整响应内容，长度：', jsonData.content?.length || 0);
+							if (jsonData.content && jsonData.content.length > 0) {
+								accumulatedContent = jsonData.content;
+								responseMessage.content = accumulatedContent;
+								history.messages[responseMessage.id] = responseMessage;
+								receivedCompleteResponse = true;
+								await tick();
+								if (autoScroll) scrollToBottom();
+							}
+							continue;
+						}
+
+						// 处理其他格式的内容更新
+						let messageContent = '';
+						if (jsonData.content) {
+							messageContent = jsonData.content;
+							console.log('从content字段获取到内容:', messageContent);
+						} else if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+							messageContent = jsonData.choices[0].delta.content;
+							console.log('从choices.delta.content获取到内容:', messageContent);
+						} else if (jsonData.text) {
+							messageContent = jsonData.text;
+							console.log('从text字段获取到内容:', messageContent);
+						} else if (jsonData.response) {
+							messageContent = jsonData.response;
+							console.log('从response字段获取到内容:', messageContent);
+						}
+
+						if (messageContent) {
+							console.log('更新消息内容，当前累积长度:', accumulatedContent.length);
+							accumulatedContent += messageContent;
+							responseMessage.content = accumulatedContent;
+							history.messages[responseMessage.id] = responseMessage;
+							await tick();
+							if (autoScroll) scrollToBottom();
+							console.log('消息内容已更新，新长度:', accumulatedContent.length);
+						} else {
+							console.log('未找到有效的内容字段');
+						}
+					} catch (e) {
+						console.error('解析JSON数据失败:', e, '原始数据:', data);
 					}
 				}
 			}
-		} catch (error) {
-			console.error('Error reading stream:', error);
-			responseMessage.error = {
-				content: `Stream error: ${error.message}`
-			};
-		} finally {
-			// 确保最终内容被保存
-			responseMessage.content = accumulatedContent;
-			responseMessage.done = true;
-			history.messages[responseMessage.id] = responseMessage;
 			
-			// 如果收到了完整响应，记录日志
+			// 流式完成后记录日志
 			if (receivedCompleteResponse) {
 				console.log('流式响应完成，使用后端提供的完整内容');
 			} else {
 				console.log('流式响应完成，使用前端累积的内容');
 			}
 			
+			// 确保最终状态被正确设置
+			responseMessage.done = true;
+			responseMessage.loading = false;
+			if (history && history.messages) {
+				history.messages[responseMessage.id] = responseMessage;
+			}
+			
+			// 在流式响应完成后保存到数据库
+			if (!$temporaryChatEnabled) {
+				await saveChatHandler($chatId, history);
+			}
+			
 			await tick();
-			scrollToBottom();
+			if (autoScroll) scrollToBottom();
+			
+		} catch (error) {
+			console.error('处理流式响应时发生错误:', error);
+			responseMessage.error = {
+				content: `Stream error: ${error.message}`
+			};
+			responseMessage.done = true;
+			responseMessage.loading = false;
+			if (history && history.messages) {
+				history.messages[responseMessage.id] = responseMessage;
+			}
 		}
 	};
 </script>
