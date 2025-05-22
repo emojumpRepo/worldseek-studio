@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { toast } from 'svelte-sonner';
 	import { Label, RadioGroup } from 'bits-ui';
 	import Cog6 from '$lib/components/icons/Cog6.svelte';
 	import CirclePlus from '$lib/components/icons/CirclePlus.svelte';
@@ -9,6 +10,12 @@
 	import DropdownSelect from '$lib/components/common/DropdownSelect.svelte';
     import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import type { Agent } from '$lib/types';
+	import { getKnowledgeBases } from '$lib/apis/models';
+
+	interface KnowledgeBase {
+		_id: string;
+		name: string;
+	}
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -26,10 +33,10 @@
 			knowledge: {
 				settings: {
 					searchMode: 'vector',
-					useLimit: 10,
-					relevance: 0.5,
-					contentReordering: false,
-					optimization: false
+					limit: 10,
+					similarity: 0.5,
+					usingReRank: false,
+					datasetSearchUsingExtensionQuery: false
 				},
 				items: []
 			},
@@ -46,10 +53,10 @@
 			knowledge: {
 				settings: {
 					searchMode: 'vector',
-					useLimit: 10,
-					relevance: 0.5,
-					contentReordering: false,
-					optimization: false
+					limit: 10,
+					similarity: 0.5,
+					usingReRank: false,
+					datasetSearchUsingExtensionQuery: false
 				},
 				items: []
 			},
@@ -92,6 +99,9 @@
 		}
 	}
 
+	// 知识库列表
+	let knowledgeBases: KnowledgeBase[] = [];
+	// 模型列表
 	const modelList = [
 		{
 			label: 'GPT-3.5-turbo',
@@ -114,11 +124,19 @@
 			value: 'gpt-4-turbo-preview-2'
 		}
 	];
-
+	// 搜索模式列表
 	const searchModeList = [
 		{
-			label: '向量',
-			value: 'vector'
+			label: '嵌入',
+			value: 'embedding '
+		},
+		{
+			label: '全文本',
+			value: 'fullTextRecall'
+		},
+		{
+			label: '混合',
+			value: 'mixedRecall'
 		}
 	];
 
@@ -150,6 +168,12 @@
         if(!agent.description) {
             agent.description = agent.workflow_app?.description || '';
         }
+		console.log('agent.params?.knowledge.items', agent.params?.knowledge.items);
+		if(!agent.params?.knowledge.items) {
+			if (!agent.params) agent.params = {};
+			if (!agent.params.knowledge) agent.params.knowledge = {};
+			agent.params.knowledge.items = [];
+		}
         dispatch('confirm', agent);
 	};
 
@@ -167,8 +191,19 @@
         }
     }
 
+	// 获取知识库列表
+	function getKnowledgeBasesList() {
+		getKnowledgeBases(localStorage.token).then((res) => {
+			knowledgeBases = res.data;
+		}).catch((err) => {
+			toast.error('获取知识库列表失败');
+			console.error('getKnowledgeBasesList error:', err);
+		});
+	}
+
 	onMount(() => {
 		mounted = true;
+		getKnowledgeBasesList();
 	});
 
 	$: if (mounted) {
@@ -182,6 +217,18 @@
 			document.body.removeChild(modalElement);
 
 			document.body.style.overflow = 'unset';
+		}
+	}
+
+	// 切换知识库选中状态
+	function toggleKnowledgeBase(kbId: string) {
+		const index = agent.params.knowledge.items.indexOf(kbId);
+		if (index === -1) {
+			// 如果未选中，则添加到选中列表
+			agent.params.knowledge.items = [...agent.params.knowledge.items, kbId];
+		} else {
+			// 如果已选中，则从选中列表中移除
+			agent.params.knowledge.items = agent.params.knowledge.items.filter(id => id !== kbId);
 		}
 	}
 </script>
@@ -356,7 +403,7 @@
 							</div>
 							<div class="grid grid-cols-5 gap-6 text-xs mb-5 p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800">
 								<!-- 搜索模式 -->
-								<div class="flex flex-col gap-2 items-center">
+								<div class="flex flex-col gap-2 items-center col-span-1"> 
 									<div class="form-title text-gray-700 dark:text-gray-300 mb-1 text-center">
 										{$i18n.t('Models KnowledgeBase Search Mode')}
 									</div>
@@ -376,7 +423,7 @@
 									<input
 										type="number"
 										class="form-input-sm"
-										bind:value={agent.params.knowledge.settings.useLimit}
+										bind:value={agent.params.knowledge.settings.limit}
 									/>
 								</div>
 								<!-- 检索相关度 -->
@@ -387,7 +434,7 @@
 									<input
 										type="number"
 										class="form-input-sm"
-										bind:value={agent.params.knowledge.settings.relevance}
+										bind:value={agent.params.knowledge.settings.similarity}
 									/>
 								</div>
 								<!-- 内容重排 -->
@@ -397,9 +444,9 @@
 									</div>
 									<div class="flex items-center gap-2">
                                         <Label.Root for="knowledgeContentReordering" class="text-xs font-medium dark:text-gray-300">
-											{agent.params?.knowledge?.settings?.contentReordering ? $i18n.t('On') : $i18n.t('Off')}
+											{agent.params?.knowledge?.settings?.usingReRank ? $i18n.t('On') : $i18n.t('Off')}
 									    </Label.Root>
-										<Switch bind:state={agent.params.knowledge.settings.contentReordering} activeClass="bg-indigo-500" />
+										<Switch bind:state={agent.params.knowledge.settings.usingReRank} activeClass="bg-indigo-500" />
                                     </div>
 								</div>
 								<!-- 优化提问 -->
@@ -409,35 +456,31 @@
 									</div>
 									<div class="flex items-center gap-2">
                                         <Label.Root for="knowledgeOptimization" class="text-xs font-medium dark:text-gray-300">
-											{agent.params?.knowledge?.settings?.optimization ? $i18n.t('On') : $i18n.t('Off')}
+											{agent.params?.knowledge?.settings?.datasetSearchUsingExtensionQuery ? $i18n.t('On') : $i18n.t('Off')}
 									    </Label.Root>
-										<Switch bind:state={agent.params.knowledge.settings.optimization} activeClass="bg-indigo-500" />
+										<Switch bind:state={agent.params.knowledge.settings.datasetSearchUsingExtensionQuery} activeClass="bg-indigo-500" />
                                     </div>
 								</div>
 							</div>
                             <hr class="form-divider mb-3" />
-                            <div class="grid grid-cols-2 gap-3 text-xs">
-                                {#each agent.params?.knowledge?.items ?? [] as item, index}
-                                    <div class="item-card">
+                            <div class="grid grid-cols-2 gap-3 text-xs mt-3">
+                                {#each knowledgeBases as kb}
+                                    <div 
+                                        class="item-card {agent.params?.knowledge?.items?.includes(kb._id) ? 'selected' : ''}"
+                                        on:click={() => toggleKnowledgeBase(kb._id)}
+                                    >
                                         <div class="item-card-content">
                                             <div class="item-badge">KB</div>
                                             <div class="item-card-title">
-                                                {item}
+                                                {kb.name}
                                             </div>
                                         </div>
-                                        <button 
-                                            class="item-delete-button" 
-                                            on:click={() => removeKnowledgeItem(index)}
-                                            aria-label="删除项目"
-                                        >
-                                            <Close />
-                                        </button>
                                     </div>
                                 {/each}
                             </div>
 						</div>
                         <!-- 工具选择 -->
-                        <div class="form-panel gradient-panel">
+                        <!-- <div class="form-panel gradient-panel">
                             <div class="form-panel-header mb-3">
                                 <div class="form-title text-gray-800 dark:text-gray-200">
                                     {$i18n.t('Models Tools')}
@@ -467,7 +510,7 @@
                                     </div>
                                 {/each}
                             </div>
-                        </div>
+                        </div> -->
 					</div>
 				</div>
 			</div>
@@ -699,89 +742,64 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.5rem 0.75rem;
-		background-color: white;
-		border-radius: 0.375rem;
+		padding: 0.15rem 0.5rem;
+		border-radius: 0.75rem;
 		border: 1px solid #e5e7eb;
-		transition: all 0.2s;
+		background-color: #ffffff;
+		min-height: 2.5rem;
+		transition: all 0.2s ease;
+		cursor: pointer;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 	}
 
 	.item-card:hover {
-		border-color: #d1d5db;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+		border-color: #818cf8;
+		background-color: #f8fafc;
 		transform: translateY(-1px);
+		box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.1), 0 2px 4px -1px rgba(99, 102, 241, 0.06);
+	}
+
+	.item-card.selected {
+		border-color: #818cf8;
+		/* background-color: #eef2ff; */
+		box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
 	}
 
 	.item-card-content {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		flex-grow: 1;
-		overflow: hidden;
+		gap: 0.75rem;
+		flex: 1;
 	}
 
 	.item-badge {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		height: 22px;
-		min-width: 22px;
-		border-radius: 4px;
-		background-color: #e0e7ff;
-		color: #4f46e5;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.5rem;
+		font-size: 0.75rem;
 		font-weight: 600;
-		font-size: 0.7rem;
+		background-color: #f1f5f9;
+		color: #64748b;
+		transition: all 0.2s ease;
 	}
 
-	.tool-badge {
-		background-color: #fae8ff;
-		color: #a855f7;
+	.item-card.selected .item-badge {
+		background-color: #818cf8;
+		color: #ffffff;
 	}
 
 	.item-card-title {
+		font-size: 0.875rem;
 		font-weight: 500;
-		color: #374151;
-		text-overflow: ellipsis;
-		overflow: hidden;
-		white-space: nowrap;
+		color: #475569;
+		transition: all 0.2s ease;
 	}
 
-	.item-delete-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 20px;
-		width: 20px;
-		border-radius: 50%;
-		color: #9ca3af;
-		transition: all 0.2s;
-	}
-	
-	.item-delete-button:hover {
-		color: #ef4444;
-		background-color: #fee2e2;
-	}
-
-	@keyframes scaleUp {
-		from {
-			transform: scale(0.985);
-			opacity: 0;
-		}
-		to {
-			transform: scale(1);
-			opacity: 1;
-		}
-	}
-
-	@keyframes scaleDown {
-		from {
-			transform: scale(1);
-			opacity: 1;
-		}
-		to {
-			transform: scale(0.985);
-			opacity: 0;
-		}
+	.item-card.selected .item-card-title {
+		color: #4f46e5;
 	}
 
 	/* 暗黑模式支持 */
@@ -837,21 +855,35 @@
 	}
 
 	:global(.dark) .item-card {
-		background-color: #1f2937;
-		border-color: #374151;
+		background-color: #1e293b;
+		border-color: #334155;
 	}
 
 	:global(.dark) .item-card:hover {
-		border-color: #4b5563;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+		border-color: #818cf8;
+		background-color: #1e293b;
+	}
+
+	:global(.dark) .item-card.selected {
+		border-color: #818cf8;
+		background-color: rgba(99, 102, 241, 0.15);
+	}
+
+	:global(.dark) .item-badge {
+		background-color: #334155;
+		color: #94a3b8;
+	}
+
+	:global(.dark) .item-card.selected .item-badge {
+		background-color: #818cf8;
+		color: #ffffff;
 	}
 
 	:global(.dark) .item-card-title {
-		color: #e5e7eb;
+		color: #e2e8f0;
 	}
-	
-	:global(.dark) .item-badge {
-		background-color: rgba(99, 102, 241, 0.2);
+
+	:global(.dark) .item-card.selected .item-card-title {
 		color: #a5b4fc;
 	}
 	

@@ -3,9 +3,8 @@
 	import { fade } from 'svelte/transition';
     import { toast } from 'svelte-sonner';
 	import Close from '$lib/components/icons/Close.svelte';
-	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import type { Agent, WorkflowApp } from '$lib/types';
-	import { createNewModel, getWorkflowApps } from '$lib/apis/models';
+	import type { WorkflowApp } from '$lib/types';
+	import { getWorkflowApps } from '$lib/apis/models';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
@@ -57,6 +56,7 @@
 	const getAllWorkflowApps = async () => {
 		isLoading = true;
 		getWorkflowApps(localStorage.token).then((res) => {
+			console.log("getWorkflowApps", res);
 			if (res.data) {
 				workflowApps = res.data;
 			}
@@ -270,7 +270,8 @@
 	}
 
 	.app-card:hover {
-		background-color: #fafafa;
+		background-color: rgba(156, 207, 216, 0.1);  /* 使用主题色的10%透明度版本 */
+		transition: background-color 0.2s ease;
 	}
 
 	.app-card-selected {

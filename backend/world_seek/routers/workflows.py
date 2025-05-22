@@ -3,7 +3,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 import logging
 import time
 from datetime import datetime
+from fastapi.responses import JSONResponse
+import aiohttp
+import json
 
+from world_seek.agents.agents import (
+    Agents,
+    AgentForm,
+    AgentResponse,
+    AgentModel,
+)
 from world_seek.workflows.workflows import (
     WorkflowForm,
     WorkflowModel,
@@ -15,14 +24,18 @@ from world_seek.utils.auth import get_admin_user, get_verified_user
 from world_seek.utils.access_control import has_access, has_permission
 from world_seek.utils.workflow import call_langflow_api
 from world_seek.env import SRC_LOG_LEVELS
+from world_seek.config import FASTGPT_BASE_URL, FASTGPT_TOKEN, REQUEST_TIMEOUT, LANGFLOW_BASE_URL
 
 # 配置日志
 log = logging.getLogger(__name__)
-log.setLevel(SRC_LOG_LEVELS.get("LANGFLOW", SRC_LOG_LEVELS["MAIN"]))
+log.setLevel(logging.DEBUG)  # 设置为 DEBUG 级别以显示所有日志
 
-# 常量定义
-DEFAULT_TIMEOUT = 180  # 默认超时时间(秒)
-DEFAULT_LANGFLOW_URL = "http://localhost:7860/api/v1/run/43dac7b4-e492-4c91-ad2e-d06bd0921303"
+# 添加控制台处理器
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
 
 router = APIRouter()
 
@@ -284,8 +297,9 @@ async def run_workflow(
     """
     start_time = time.time()
     workflow_id = form_data.get("workflow_id")
-    
-    log.info(f"执行工作流: ID={workflow_id}, 用户ID={user.id}")
+    agent_id = form_data.get("agent_id")
+
+    log.info(f"执行工作流: 工作流ID={workflow_id}, 智能体ID={agent_id}, 用户ID={user.id}")
     
     # 获取最新消息
     messages = form_data.get("messages", [])
@@ -313,19 +327,25 @@ async def run_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
+    
+    # 获取智能体
+    agent = Agents.get_agent_by_id(agent_id)
+    if not agent:
+        log.warning(f"智能体未找到: ID={agent_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ERROR_MESSAGES.NOT_FOUND,
+        )
 
     try:
         # 准备API URL
-        api_url = workflow.api_path
+        api_url = LANGFLOW_BASE_URL + workflow.api_path
         if not api_url:
             log.error(f"API路径未配置: ID={workflow_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Langflow API path not configured for this workflow",
             )
-        
-        if not api_url.startswith(('http://', 'https://')):
-            api_url = DEFAULT_LANGFLOW_URL
         
         log.info(f"完整API URL: {api_url}")
         
@@ -336,12 +356,35 @@ async def run_workflow(
         
         # 获取参数
         params = form_data.get("params", {})
-        stream = params.get("stream", False)
-        timeout = params.get("timeout", DEFAULT_TIMEOUT)
+        stream = params.get("stream", True)
+        timeout = params.get("timeout", REQUEST_TIMEOUT)
+
+        # 合并智能体与工作流应用参数
+        agent_params = agent.params or {}
+        workflow_params = workflow.params or {}
+        merged_params = {**workflow_params, **agent_params}
+        log.info(f"合并后的参数: {merged_params}")
+        knowledge_params = merged_params.get("knowledge", {})
+        kb_settings = knowledge_params.get("settings", {})
+
+        input_value = {
+            "user_input": latest_message,
+                "kb_params": {
+                    "datasetId": knowledge_params["items"][0],
+                    "text": latest_message,
+                    "searchMode": kb_settings["searchMode"],
+                    "limit": kb_settings["limit"],
+                    "similarity": kb_settings["similarity"],
+                    "usingReRank": kb_settings["usingReRank"],
+                    "datasetSearchUsingExtensionQuery": kb_settings["datasetSearchUsingExtensionQuery"],
+                },
+            'url_value': FASTGPT_BASE_URL + "/api/core/dataset/searchTest",
+        }
         
         # 准备请求数据
         langflow_data = {
-            "input_value": latest_message,
+            "input_value": json.dumps(input_value),
+            # "input_value": latest_message,
             "input_type": "chat",
             "output_type": "chat",
         }
@@ -376,3 +419,49 @@ async def run_workflow(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Workflow processing error: {str(e)}",
         )
+
+
+############################
+# GetKnowledgeBases
+############################
+
+@router.get("/knowledge_bases")
+async def get_knowledge_bases(user=Depends(get_verified_user)):
+    """
+    获取知识库列表
+    
+    Args:
+        user: 当前用户
+        
+    Returns:
+        知识库列表
+    """
+    log.info(f"开始获取知识库列表: 用户ID={user.id}, 角色={user.role}")
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{FASTGPT_BASE_URL}/api/core/dataset/list?parentId="
+            headers = {
+                "Authorization": f"Bearer {FASTGPT_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            log.info(f"发送请求到FastGPT: URL={url}")
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    log.info(f"成功获取知识库列表: {data}")
+                    log.info(f"成功获取知识库列表: {type(data)}")
+                    return JSONResponse(content={"data": data.get("data", [])})
+                else:
+                    error_text = await response.text()
+                    log.error(f"FastGPT请求失败: 状态码={response.status}, 错误信息={error_text}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="获取知识库列表失败"
+                    )
+    except Exception as e:
+        log.error(f"获取知识库列表时发生错误: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取知识库列表失败: {str(e)}"
+        )
+

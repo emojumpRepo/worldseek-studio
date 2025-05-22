@@ -83,6 +83,7 @@
 	};
 
     const saveModelHandler = async (e: CustomEvent<Agent>) => {
+        console.log('saveModelHandler', e.detail);
         const res = await updateModelById(localStorage.token, e.detail.id, e.detail).catch((e) => {
 			toast.error($i18n.t(`Model APP Settings Save Failed`));
 			return null;

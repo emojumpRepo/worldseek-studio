@@ -96,18 +96,39 @@ class WorkflowModel(BaseModel):
         """
         自定义模型验证方法，确保api_path和app_token字段被正确设置
         """
-        # 首先使用标准验证
-        validated_data = cls.model_validate(obj, *args, **kwargs)
-        
-        # 检查api_path是否存在，如果不存在，尝试从params中获取
-        if not validated_data.api_path and validated_data.params and isinstance(validated_data.params, dict):
-            validated_data.api_path = validated_data.params.get('api_path', "")
-        
-        # 检查app_token是否存在，如果不存在，尝试从params中获取
-        # if not validated_data.app_token and validated_data.params and isinstance(validated_data.params, dict):
-        #     validated_data.app_token = validated_data.params.get('app_token', "")
-        
-        return validated_data
+        try:
+            # 首先使用标准验证
+            validated_data = cls.model_validate(obj, *args, **kwargs)
+            
+            # 安全地处理params字段
+            if validated_data.params is None:
+                validated_data.params = {}
+            elif isinstance(validated_data.params, str):
+                try:
+                    import json
+                    validated_data.params = json.loads(validated_data.params)
+                except json.JSONDecodeError:
+                    validated_data.params = {}
+            
+            # 检查api_path是否存在，如果不存在，尝试从params中获取
+            if not validated_data.api_path and validated_data.params and isinstance(validated_data.params, dict):
+                validated_data.api_path = validated_data.params.get('api_path', "")
+            
+            return validated_data
+        except Exception as e:
+            print(f"模型验证失败: {str(e)}")
+            # 如果验证失败，返回一个基本的有效对象
+            return cls(
+                id=obj.id if hasattr(obj, 'id') else 0,
+                name=obj.name if hasattr(obj, 'name') else "",
+                description=obj.description if hasattr(obj, 'description') else "",
+                params={},
+                api_path="",
+                app_token="",
+                is_deleted=obj.is_deleted if hasattr(obj, 'is_deleted') else False,
+                updated_at=obj.updated_at if hasattr(obj, 'updated_at') else int(time.time()),
+                created_at=obj.created_at if hasattr(obj, 'created_at') else int(time.time())
+            )
 
 
 ####################
@@ -161,45 +182,56 @@ class ModelsTable:
         try:
             with get_db() as db:
                 workflows = []
-                # 获取所有记录
                 all_workflows = db.query(Workflow).all()
-                print(f"查询到 {len(all_workflows)} 条记录")
                 
                 for workflow in all_workflows:
                     try:
                         print(f"处理workflow: {workflow.id}")
-
-                        # 安全地验证模型
+                        
+                        # 安全地处理params字段
+                        params = {}
+                        if workflow.params is not None:
+                            if isinstance(workflow.params, str):
+                                try:
+                                    import json
+                                    params = json.loads(workflow.params)
+                                except json.JSONDecodeError:
+                                    print(f"JSON解析失败，使用空字典: {workflow.params}")
+                                    params = {}
+                            elif isinstance(workflow.params, dict):
+                                params = workflow.params
+                        
+                        # 创建基本数据字典
+                        workflow_data = {
+                            "id": workflow.id,
+                            "name": workflow.name or "",
+                            "description": workflow.description or "",
+                            "params": params,
+                            "api_path": workflow.api_path or "",
+                            "app_token": workflow.app_token or "",
+                            "is_deleted": workflow.is_deleted or False,
+                            "updated_at": workflow.updated_at or int(time.time()),
+                            "created_at": workflow.created_at or int(time.time())
+                        }
+                        
                         try:
-                            workflow_model = WorkflowModel.model_validate_workflow(workflow)
-                            workflow_data = workflow_model.model_dump()
-                            
-                            # 移除敏感字段
-                            workflow_data.pop('api_path', None)
-                            workflow_data.pop('app_token', None)
-                            
-                            # 构建响应对象
-                            response_data = {
-                                **workflow_data,
-                            }
-                            
-                            workflow_response = WorkflowResponse.model_validate(response_data)
+                            # 验证并创建响应对象
+                            workflow_response = WorkflowResponse.model_validate(workflow_data)
                             workflows.append(workflow_response)
-                            
                         except Exception as workflow_err:
-                            print(f"应用验证失败: {workflow_err}")
-                            # 继续处理下一条记录
+                            print(f"响应对象验证失败: {workflow_err}")
+                            print(f"workflow数据: {workflow_data}")
+                            continue
                     
                     except Exception as workflow_err:
                         print(f"处理单个workflow时出错: {workflow_err}")
-                        # 继续处理下一条记录
+                        continue
                 
                 print(f"成功处理 {len(workflows)} 条记录")
                 return workflows
                 
         except Exception as e:
             print(f"get_workflows方法发生异常: {e}")
-            # 返回空列表而不是抛出异常
             return []
 
     def get_workflow_by_id(self, id: str) -> Optional[WorkflowModel]:

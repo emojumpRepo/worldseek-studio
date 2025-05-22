@@ -1552,6 +1552,7 @@
 			const res = await runLangflowWorkflow(
 				localStorage.token,
 				model.base_app_id,
+				model.id,
 				createMessagesList(_history, responseMessageId).map((message) => ({
 					role: message.role,
 					content: message.content

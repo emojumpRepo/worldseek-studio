@@ -136,6 +136,7 @@
 			const res = await runLangflowWorkflow(
 				localStorage.token,
 				model.base_app_id,
+				model.id,
 				[
 					{
 						role: 'assistant',

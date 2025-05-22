@@ -30,10 +30,10 @@ export type Params = {
         knowledge: {
             settings: {
                 searchMode: string;
-                useLimit: number;
-                relevance: number;
-                contentReordering: boolean;
-                optimization: boolean;
+                limit: number;
+                similarity: number;
+                usingReRank: boolean;
+                datasetSearchUsingExtensionQuery: boolean;
             };
             items: string[];
         };
