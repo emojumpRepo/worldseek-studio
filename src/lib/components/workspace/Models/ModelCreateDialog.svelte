@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
-    import { toast } from 'svelte-sonner';
+	import { toast } from 'svelte-sonner';
 	import Close from '$lib/components/icons/Close.svelte';
 	import type { WorkflowApp } from '$lib/types';
 	import { getWorkflowApps } from '$lib/apis/models';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<Writable<i18nType>>('i18n');
 	const dispatch = createEventDispatcher();
 
 	export let show = false;
@@ -56,7 +58,7 @@
 	const getAllWorkflowApps = async () => {
 		isLoading = true;
 		getWorkflowApps(localStorage.token).then((res) => {
-			console.log("getWorkflowApps", res);
+			console.log('getWorkflowApps', res);
 			if (res.data) {
 				workflowApps = res.data;
 			}
@@ -151,42 +153,48 @@
 							<div class="form-title text-sm mb-2">
 								{$i18n.t('Model APP Choice')}
 							</div>
-							<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 pb-1">
-								{#each workflowApps as workflowApp}
-									<div
-										class="app-card {selectedWorkflowApp?.id === workflowApp.id ? 'app-card-selected' : ''}"
-										on:click={() => {
-											selectedWorkflowApp = workflowApp;
-											name = workflowApp.name;
-										}}
-									>
-										<div class="app-badge">
-											<span class="app-initial">{workflowApp.name.charAt(0)}</span>
-										</div>
-										<div class="app-card-content">
-											<div class="app-card-name">{workflowApp.name}</div>
-											<div class="app-card-desc">{workflowApp.description}</div>
-										</div>
+							{#if workflowApps.length === 0}
+								<div class="flex flex-col items-center justify-center h-32 gap-3">
+									<div class="text-gray-400">
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+										</svg>
 									</div>
-								{/each}
-							</div>
+									<p class="text-gray-500 text-base font-medium">暂无应用</p>
+								</div>
+							{:else}
+								<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 pb-1">
+									{#each workflowApps as workflowApp}
+										<div
+											class="app-card {selectedWorkflowApp?.id === workflowApp.id
+												? 'app-card-selected'
+												: ''}"
+											on:click={() => {
+												selectedWorkflowApp = workflowApp;
+												name = workflowApp.name;
+											}}
+										>
+											<div class="app-badge">
+												<span class="app-initial">{workflowApp.name.charAt(0)}</span>
+											</div>
+											<div class="app-card-content">
+												<div class="app-card-name">{workflowApp.name}</div>
+												<div class="app-card-desc">{workflowApp.description}</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					</div>
 				{/if}
 			</div>
 
 			<div class="p-4 border-t border-gray-200 flex justify-end items-center gap-3">
-				<button 
-					class="btn-cancel" 
-					on:click={closeModal}
-				>
+				<button class="btn-cancel" on:click={closeModal}>
 					{$i18n.t('Cancel')}
 				</button>
-				<button 
-					class="btn-primary" 
-					on:click={confirmHandler}
-					disabled={!selectedWorkflowApp}
-				>
+				<button class="btn-primary" on:click={confirmHandler} disabled={!selectedWorkflowApp}>
 					{$i18n.t('Create')}
 				</button>
 			</div>
@@ -270,7 +278,7 @@
 	}
 
 	.app-card:hover {
-		background-color: rgba(156, 207, 216, 0.1);  /* 使用主题色的10%透明度版本 */
+		background-color: rgba(156, 207, 216, 0.1); /* 使用主题色的10%透明度版本 */
 		transition: background-color 0.2s ease;
 	}
 
