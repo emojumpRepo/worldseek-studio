@@ -31,7 +31,11 @@ RUN npm ci
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+# 增加 Node.js 的可用内存
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
+# 构建完成后可以取消设置
+ENV NODE_OPTIONS=""
 
 ######## WebUI backend ########
 FROM python:3.11-slim-bookworm AS base
