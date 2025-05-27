@@ -2699,7 +2699,7 @@ FASTGPT_BASE_URL = "http://192.168.5.48:3001"
 FASTGPT_TOKEN = "fastgpt-h9CtpSg9sDYRFW6c1QDZ9pw0kGWmHde3y1weZz1eNoWh3L1QVu9ui3D9TajcnAFG"  # 需要替换为实际的token
 
 # Langflow配置
-LANGFLOW_BASE_URL = "http://localhost:7860/api/v1/run/"
+LANGFLOW_BASE_URL = "http://192.168.5.48:7860/api/v1/run/"
 
 # 请求超时配置
 REQUEST_TIMEOUT = 180  # 设置请求超时时间为180秒
