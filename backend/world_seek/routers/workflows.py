@@ -24,7 +24,7 @@ from world_seek.utils.auth import get_admin_user, get_verified_user
 from world_seek.utils.access_control import has_access, has_permission
 from world_seek.utils.workflow import call_langflow_api
 from world_seek.env import SRC_LOG_LEVELS
-from world_seek.config import FASTGPT_BASE_URL, FASTGPT_TOKEN, REQUEST_TIMEOUT, LANGFLOW_BASE_URL
+from world_seek.config import FASTGPT_BASE_URL, FASTGPT_TOKEN, REQUEST_TIMEOUT, LANGFLOW_BASE_URL, LANGFLOW_API_BASE_URL, LANGFLOW_TOKEN
 
 # 配置日志
 log = logging.getLogger(__name__)
@@ -36,6 +36,101 @@ console_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
+
+async def sync_workflows_with_database(flows: List[Dict[str, Any]], user):
+    """
+    将获取到的工作流与数据库中的数据同步
+    
+    Args:
+        flows: 从API获取的工作流列表
+        user: 当前用户
+    
+    Returns:
+        None
+    """
+    log.info(f"开始同步工作流数据到数据库: 工作流数量={len(flows)}")
+    
+    try:
+        # 获取数据库中现有的所有工作流
+        existing_workflows = Workflows.get_all_workflows()
+        existing_workflow_ids = {w.api_path: w for w in existing_workflows}
+        
+        # 记录处理结果
+        updated_count = 0
+        created_count = 0
+        unchanged_count = 0
+        deleted_count = 0
+        
+        # 跟踪API返回的工作流ID
+        api_flow_ids = set()
+        
+        # 遍历API返回的工作流
+        for flow in flows:
+            flow_id = flow.get("id")
+            if not flow_id:
+                log.warning(f"工作流缺少ID字段，跳过: {flow}")
+                continue
+            
+            api_flow_ids.add(flow_id)
+                
+            # 准备工作流数据
+            try:  
+                workflow_data = WorkflowForm(
+                    name=flow.get("name", "未命名工作流"),
+                    description=flow.get("description", ""),
+                    api_path=flow_id,
+                )
+
+                log.info(f"创建WorkflowForm: {workflow_data}")
+            except Exception as e:
+                log.error(f"创建WorkflowForm时出错: {str(e)}, flow_id={flow_id}")
+                continue
+            
+            # 检查工作流是否已存在
+            if flow_id in existing_workflow_ids:
+                existing_workflow = existing_workflow_ids[flow_id]
+                
+                # 检查是否需要更新
+                needs_update = (
+                    existing_workflow.name != workflow_data.name or
+                    existing_workflow.description != workflow_data.description
+                )
+                
+                if needs_update:
+                    # 更新工作流
+                    updated_workflow = Workflows.update_workflow_by_id(existing_workflow.id, workflow_data)
+                    if updated_workflow:
+                        log.info(f"更新工作流: ID={existing_workflow.id}, 名称={workflow_data.name}")
+                        updated_count += 1
+                    else:
+                        log.error(f"更新工作流失败: ID={existing_workflow.id}")
+                else:
+                    log.debug(f"工作流无需更新: ID={existing_workflow.id}")
+                    unchanged_count += 1
+            else:
+                # 如果不存在，创建新工作流
+                new_workflow = Workflows.insert_new_workflow(workflow_data)
+                if new_workflow:
+                    log.info(f"创建新工作流: ID={new_workflow.id}, 名称={workflow_data.name}")
+                    created_count += 1
+                else:
+                    log.error(f"创建工作流失败: flow_id={flow_id}")
+        
+        # 处理需要删除的工作流（数据库中存在但API返回中不存在）
+        for db_workflow_id, db_workflow in existing_workflow_ids.items():
+            log.info(f"检查工作流: ID={db_workflow.id}, 名称={db_workflow.name}, api_path={db_workflow_id}")
+            if db_workflow_id not in api_flow_ids:
+                # 删除工作流
+                if Workflows.delete_workflow_by_id(db_workflow.id):
+                    log.info(f"删除不存在的工作流: ID={db_workflow.id}, 名称={db_workflow.name}, api_path={db_workflow_id}")
+                    deleted_count += 1
+                else:
+                    log.error(f"删除工作流失败: ID={db_workflow.id}")
+        
+        log.info(f"工作流同步完成: 新增={created_count}, 更新={updated_count}, 无变化={unchanged_count}, 删除={deleted_count}")
+    except Exception as e:
+        log.error(f"同步工作流数据时发生错误: {str(e)}")
+        # 不抛出异常，让API仍然可以返回数据
 
 router = APIRouter()
 
@@ -59,6 +154,50 @@ async def get_workflows(
         工作流列表
     """
     log.info(f"获取工作流列表: 用户ID={user.id}, 角色={user.role}")
+    
+    # 先从Langflow API获取最新的工作流数据
+    try:
+        log.info("从Langflow获取最新工作流数据")
+        async with aiohttp.ClientSession() as session:
+            url = f"{LANGFLOW_API_BASE_URL}/flows/?remove_example_flows=true&components_only=false&get_all=true&header_flows=false&page=1&size=50"
+            headers = {
+                "Authorization": LANGFLOW_TOKEN,
+                "Content-Type": "application/json"
+            }
+
+            log.info(f"发送请求到Langflow: URL={url}")
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    log.info(f"成功获取Langflow工作流数据: {type(data)}")
+                    
+                    # 处理不同的数据结构
+                    flows_list = []
+                    
+                    if isinstance(data, list):
+                        # 如果data是列表，使用列表
+                        flows_list = data
+                    elif isinstance(data, dict):
+                        # 如果data是字典，尝试获取flows字段
+                        flows_list = data.get("flows", [])
+                    else:
+                        # 如果是其他类型，包装成列表
+                        flows_list = [data] if data else []
+                    
+                    # 筛选掉is_component为true的对象
+                    filtered_flows = [flow for flow in flows_list if not flow.get("is_component", False)]
+                    
+                    log.info(f"过滤前工作流数量: {len(flows_list)}, 过滤后: {len(filtered_flows)}")
+                    
+                    # 同步数据库中的工作流数据
+                    await sync_workflows_with_database(filtered_flows, user)
+                else:
+                    error_text = await response.text()
+                    log.warning(f"Langflow请求失败，将使用现有数据库数据: 状态码={response.status}, 错误信息={error_text}")
+    except Exception as e:
+        log.warning(f"从Langflow获取工作流数据失败，将使用现有数据库数据: {str(e)}")
+    
+    # 返回数据库中的工作流数据
     return Workflows.get_workflows(user.id, user.role)
 
 ############################
@@ -107,7 +246,11 @@ async def create_new_workflow(
         )
 
     # 创建新工作流
-    workflow = Workflows.insert_new_workflow(form_data, user.id)
+    # 将用户信息存储在params中
+    if form_data.params is None:
+        form_data.params = {}
+    form_data.params["user_id"] = user.id
+    workflow = Workflows.insert_new_workflow(form_data)
     if workflow:
         log.info(f"工作流创建成功: ID={workflow.id}")
         return workflow
@@ -364,22 +507,36 @@ async def run_workflow(
         workflow_params = workflow.params or {}
         merged_params = {**workflow_params, **agent_params}
         log.info(f"合并后的参数: {merged_params}")
-        knowledge_params = merged_params.get("knowledge", {})
-        kb_settings = knowledge_params.get("settings", {})
-
+        
+        # 基本的输入值，不包含知识库参数
         input_value = {
             "user_input": latest_message,
-                "kb_params": {
-                    "datasetId": knowledge_params["items"][0],
-                    "text": latest_message,
-                    "searchMode": kb_settings["searchMode"],
-                    "limit": kb_settings["limit"],
-                    "similarity": kb_settings["similarity"],
-                    "usingReRank": kb_settings["usingReRank"],
-                    "datasetSearchUsingExtensionQuery": kb_settings["datasetSearchUsingExtensionQuery"],
-                },
-            'url_value': FASTGPT_BASE_URL + "/api/core/dataset/searchTest",
         }
+        
+        # 检查是否有知识库参数
+        knowledge_params = merged_params.get("knowledge", {})
+        if knowledge_params:
+            kb_settings = knowledge_params.get("settings", {})
+            kb_items = knowledge_params.get("items", [])
+            
+            # 只有当知识库项目存在时，才添加知识库参数
+            if kb_items:
+                dataset_id = kb_items[0]
+                input_value["kb_params"] = {
+                    "datasetId": dataset_id,
+                    "text": latest_message,
+                    "searchMode": kb_settings.get("searchMode", "embedding"),
+                    "limit": kb_settings.get("limit", 10),
+                    "similarity": kb_settings.get("similarity", 0.5),
+                    "usingReRank": kb_settings.get("usingReRank", True),
+                    "datasetSearchUsingExtensionQuery": kb_settings.get("datasetSearchUsingExtensionQuery", False),
+                }
+                input_value["url_value"] = FASTGPT_BASE_URL + "/api/core/dataset/searchTest"
+                log.info("添加知识库参数到请求")
+            else:
+                log.info("知识库items为空，不添加知识库参数")
+        else:
+            log.info("未找到知识库参数，不添加知识库参数")
         
         # 准备请求数据
         langflow_data = {

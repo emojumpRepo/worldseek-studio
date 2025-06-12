@@ -77,7 +77,7 @@ class Workflow(Base):
 
 
 class WorkflowModel(BaseModel):
-    id: int
+    id: Optional[int] = None
     
     name: str
     description: str
@@ -152,16 +152,20 @@ class ModelsTable:
     def insert_new_workflow(
         self, form_data: WorkflowForm
     ) -> Optional[WorkflowModel]:
-        model = WorkflowModel(
-            **{
-                **form_data.model_dump(),
-                "created_at": int(time.time()),
-                "updated_at": int(time.time()),
-            }
-        )
+        # 准备模型数据，排除id字段，让数据库自动生成
+        model_data = {
+            **form_data.model_dump(exclude={"id"} if form_data.id is None else {}),
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+        }
+        
+        # 创建模型对象
+        model = WorkflowModel(**model_data)
+        
         try:
             with get_db() as db:
-                result = Workflow(**model.model_dump())
+                # 创建数据库记录，如果id为None，数据库会自动生成
+                result = Workflow(**model.model_dump(exclude={"id"} if model.id is None else {}))
                 db.add(result)
                 db.commit()
                 db.refresh(result)
