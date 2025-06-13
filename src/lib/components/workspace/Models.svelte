@@ -19,6 +19,8 @@
 	import Spinner from '../common/Spinner.svelte';
 	import { eventBus } from '$lib/stores';
 
+	import { WS_FLOW_BASE_URL } from '$lib/constants';
+
 	let shiftKey = false;
 	let loaded = false;
 
@@ -159,9 +161,13 @@
 		eventBus.update((bus) => ({ ...bus, showCreateDialog: false }));
 	}
 
-	// 直接打开创建弹窗
+	// 智能体开发 - 跳转到外部开发网站
+	const navigateToDevelop = () => {
+		window.open(WS_FLOW_BASE_URL, '_blank');
+	};
+
 	const openCreateDialog = () => {
-		console.log('直接打开创建弹窗');
+		console.log('打开新建智能体弹窗');
 		showModelCreateDialog = true;
 	};
 </script>
@@ -183,26 +189,97 @@
 	<ModelCreateDialog bind:show={showModelCreateDialog} on:confirm={createModelHandler} />
 
 	<div class="my-4 mb-5">
-		<div class="flex justify-between items-center mb-4">
-			<h2 class="text-xl font-bold">智能体列表</h2>
-			<button
-				class="flex items-center gap-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-				on:click={openCreateDialog}
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					class="h-5 w-5"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-				>
-					<path
-						fill-rule="evenodd"
-						d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-						clip-rule="evenodd"
+		<div class="flex justify-between items-center mb-6">
+			<div class="flex items-center gap-4">
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-white">智能体列表</h2>
+				<div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+					<span class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full font-medium">
+						{filteredModels.length} 个智能体
+					</span>
+				</div>
+			</div>
+			<div class="flex items-center gap-3">
+				<!-- 搜索框 -->
+				<div class="relative">
+					<svg
+						class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+						/>
+					</svg>
+					<input
+						type="text"
+						placeholder="搜索智能体..."
+						bind:value={searchValue}
+						class="pl-10 pr-4 py-2 w-64 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
 					/>
-				</svg>
-				新建智能体
-			</button>
+				</div>
+				
+				<!-- 智能体开发按钮 -->
+				<button
+					class="header-btn btn-secondary"
+					on:click={navigateToDevelop}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+						/>
+					</svg>
+					<span class="hidden sm:inline">智能体开发</span>
+					<!-- 外部链接图标 -->
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-3 w-3 ml-1 opacity-60"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+						/>
+					</svg>
+				</button>
+				
+				<!-- 新建智能体按钮 -->
+				<button
+					class="header-btn btn-primary"
+					on:click={openCreateDialog}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					<span>新建智能体</span>
+				</button>
+			</div>
 		</div>
 
 		{#if filteredModels.length === 0}
@@ -317,6 +394,77 @@
 {/if}
 
 <style>
+	/* 头部按钮样式 */
+	.header-btn {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 16px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		border-radius: 8px;
+		transition: all 0.2s ease;
+		border: 1px solid transparent;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.btn-primary {
+		background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+		color: white;
+		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+	}
+
+	.btn-primary:hover {
+		background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+		box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+		transform: translateY(-1px);
+	}
+
+	.btn-primary:active {
+		transform: translateY(0);
+		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+	}
+
+	.btn-secondary {
+		background-color: white;
+		color: #6b7280;
+		border-color: #e5e7eb;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	}
+
+	.btn-secondary:hover {
+		background-color: #f9fafb;
+		color: #374151;
+		border-color: #d1d5db;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
+
+	/* 暗色模式支持 */
+	:global(.dark) .btn-secondary {
+		background-color: #374151;
+		color: #d1d5db;
+		border-color: #4b5563;
+	}
+
+	:global(.dark) .btn-secondary:hover {
+		background-color: #4b5563;
+		color: #f3f4f6;
+		border-color: #6b7280;
+	}
+
+	/* 响应式设计 */
+	@media (max-width: 640px) {
+		.header-btn {
+			padding: 8px 12px;
+			font-size: 0.8rem;
+		}
+		
+		.header-btn span {
+			display: none;
+		}
+	}
+
 	.agent-card {
 		background-color: white;
 		border-radius: 12px;

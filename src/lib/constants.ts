@@ -6,6 +6,8 @@ export const APP_NAME = 'WorldSeek Studio';
 export const WEBUI_HOSTNAME = browser ? (dev ? `${location.hostname}` : `${location.host}`) : '';
 export const WEBUI_BASE_URL = browser ? (dev ? `http://${WEBUI_HOSTNAME}` : `http://${WEBUI_HOSTNAME}`) : ``;
 
+export const WS_FLOW_BASE_URL = `http://${location.hostname}:5000/ws-flow`;
+
 export const WEBUI_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1`;
 
 export const OLLAMA_API_BASE_URL = `${WEBUI_BASE_URL}/ollama`;
