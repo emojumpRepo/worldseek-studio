@@ -31,6 +31,7 @@ export const getModels = async (token: string = '') => {
 	return res;
 };
 
+// 获取工作流应用
 export const getWorkflowApps = async (token: string = '') => {
 	let error = null;
 
@@ -57,6 +58,37 @@ export const getWorkflowApps = async (token: string = '') => {
 
 	if (error) {
 		console.error('getWorkflowApps捕获到错误:', error);
+		return { data: [] };
+	}
+	return res;
+};
+
+// 获取知识库列表
+export const getKnowledgeBases = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/workflows/knowledge_bases`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			const data = await res.json();
+			console.log('getKnowledgeBases res:', data.data);
+			return { data: Array.isArray(data.data) ? data.data : [] };
+		})
+		.catch((err) => {
+			error = err;
+			console.log('getKnowledgeBases error:', err);
+			return { data: [] };
+		});
+
+	if (error) {
+		console.error('getKnowledgeBases捕获到错误:', error);
 		return { data: [] };
 	}
 	return res;

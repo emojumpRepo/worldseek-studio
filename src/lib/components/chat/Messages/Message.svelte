@@ -39,6 +39,16 @@
 	export let addMessages;
 	export let triggerScroll;
 	export let readOnly = false;
+
+	export let loading = false;
+	
+	$: messageLoading = loading || (history?.messages?.[messageId]?.loading === true);
+	
+	function getMessageSafely() {
+		return history?.messages?.[messageId] || null;
+	}
+	
+	$: messageExists = !!getMessageSafely();
 </script>
 
 <div
@@ -46,7 +56,7 @@
 		? 'max-w-full'
 		: 'max-w-5xl'} mx-auto rounded-lg group"
 >
-	{#if history.messages[messageId]}
+	{#if messageExists}
 		{#if history.messages[messageId].role === 'user'}
 			<UserMessage
 				{user}
@@ -108,5 +118,11 @@
 				{readOnly}
 			/>
 		{/if}
+	{/if}
+
+	{#if messageLoading}
+		<div class="flex items-center justify-center py-2">
+			<div class="loading loading-dots loading-md"></div>
+		</div>
 	{/if}
 </div>

@@ -34,8 +34,29 @@ class JSONField(types.TypeDecorator):
         return json.dumps(value)
 
     def process_result_value(self, value: Optional[_T], dialect: Dialect) -> Any:
-        if value is not None:
-            return json.loads(value)
+        try:
+            # 如果值是None，直接返回空字典
+            if value is None:
+                return {}
+                
+            # 如果已经是字典，直接返回
+            if isinstance(value, dict):
+                return value
+                
+            # 如果是空字符串，返回空字典
+            if isinstance(value, str) and not value.strip():
+                return {}
+                
+            # 尝试解析JSON字符串
+            if isinstance(value, str):
+                return json.loads(value)
+                
+            # 其他情况返回空字典
+            return {}
+            
+        except Exception as e:
+            log.error(f"JSON解析错误: {str(e)}, 值: {value}")
+            return {}
 
     def copy(self, **kw: Any) -> Self:
         return JSONField(self.impl.length)

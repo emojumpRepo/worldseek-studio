@@ -176,20 +176,6 @@
 	<div class="w-full absolute top-0 left-0 right-0 h-8 drag-region" />
 
 	{#if loaded}
-		<div class="fixed m-10 z-50">
-			<div class="flex space-x-2">
-				<div class=" self-center">
-					<img
-						id="logo"
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/studio_logo.svg"
-						class="w-50"
-						alt="logo"
-					/>
-				</div>
-			</div>
-		</div>
-
 		<div
 			class="fixed bg-transparent min-h-screen w-full flex justify-center font-primary z-50 text-black dark:text-white"
 		>
@@ -218,16 +204,17 @@
 							}}
 						>
 							<div class="mb-1">
-								<div class=" text-2xl font-medium">
+								<div class="text-2xl font-medium">
 									{#if $config?.onboarding ?? false}
-										{$i18n.t(`Get started with {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
+										{$i18n.t(`Get started with {{WEBUI_NAME}}`, { WEBUI_NAME: '广东工业大学' })}
 									{:else if mode === 'ldap'}
-										{$i18n.t(`Sign in to {{WEBUI_NAME}} with LDAP`, { WEBUI_NAME: $WEBUI_NAME })}
+										{$i18n.t(`Sign in to {{WEBUI_NAME}} with LDAP`, { WEBUI_NAME: '广东工业大学' })}
 									{:else if mode === 'signin'}
-										{$i18n.t(`Sign in to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
+										{$i18n.t(`Sign in to {{WEBUI_NAME}}`, { WEBUI_NAME: '广东工业大学' })}
 									{:else}
-										{$i18n.t(`Sign up to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
+										{$i18n.t(`Sign up to {{WEBUI_NAME}}`, { WEBUI_NAME: '广东工业大学' })}
 									{/if}
+									<div>{$i18n.t(`Studio Name`)}</div>
 								</div>
 
 								{#if $config?.onboarding ?? false}
@@ -244,13 +231,13 @@
 								<div class="flex flex-col mt-4">
 									{#if mode === 'signup'}
 										<div class="mb-2">
-											<div class=" text-sm font-medium text-left mb-1">{$i18n.t('Name')}</div>
+											<div class=" text-sm font-medium text-left mb-1">{$i18n.t('Username')}</div>
 											<input
 												bind:value={name}
 												type="text"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+												class="my-0.5 p-2.5 w-full text-sm bg-transparent border-[#D0D5DD] border-1 border-solid rounded-lg"
 												autocomplete="name"
-												placeholder={$i18n.t('Enter Your Full Name')}
+												placeholder={$i18n.t('Enter Your Username')}
 												required
 											/>
 										</div>
@@ -262,7 +249,7 @@
 											<input
 												bind:value={ldapUsername}
 												type="text"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+												class="my-0.5 p-2.5 w-full text-sm bg-transparent border-[#D0D5DD] border-1 border-solid rounded-lg"
 												autocomplete="username"
 												name="username"
 												placeholder={$i18n.t('Enter Your Username')}
@@ -275,7 +262,7 @@
 											<input
 												bind:value={email}
 												type="email"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+												class="my-0.5 p-2.5 w-full text-sm bg-transparent border-[#D0D5DD] border-1 border-solid rounded-lg"
 												autocomplete="email"
 												name="email"
 												placeholder={$i18n.t('Enter Your Email')}
@@ -290,7 +277,7 @@
 										<input
 											bind:value={password}
 											type="password"
-											class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+											class="my-0.5 p-2.5 w-full text-sm bg-transparent border-[#D0D5DD] border-1 border-solid rounded-lg"
 											placeholder={$i18n.t('Enter Your Password')}
 											autocomplete="current-password"
 											name="current-password"
@@ -303,14 +290,14 @@
 								{#if $config?.features.enable_login_form || $config?.features.enable_ldap}
 									{#if mode === 'ldap'}
 										<button
-											class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-medium text-sm py-2.5"
+											class="bg-[#101828] hover:bg-[#101828]/70 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-[65%] rounded-full font-medium text-sm py-3 text-white"
 											type="submit"
 										>
 											{$i18n.t('Authenticate')}
 										</button>
 									{:else}
 										<button
-											class="bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-medium text-sm py-2.5"
+											class="bg-[#101828] hover:bg-[#101828]/70 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-[65%] rounded-full font-medium text-sm py-3 text-white"
 											type="submit"
 										>
 											{mode === 'signin'
@@ -319,29 +306,58 @@
 													? $i18n.t('Create Admin Account')
 													: $i18n.t('Create Account')}
 										</button>
-
-										{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
-											<div class=" mt-4 text-sm text-center">
-												{mode === 'signin'
-													? $i18n.t("Don't have an account?")
-													: $i18n.t('Already have an account?')}
-
-												<button
-													class=" font-medium underline"
-													type="button"
-													on:click={() => {
-														if (mode === 'signin') {
-															mode = 'signup';
-														} else {
-															mode = 'signin';
-														}
-													}}
-												>
-													{mode === 'signin' ? $i18n.t('Sign up') : $i18n.t('Sign in')}
-												</button>
-											</div>
-										{/if}
 									{/if}
+								{/if}
+							</div>
+							<div class="mt-5 flex justify-between items-center">
+								<div class="flex space-x-2">
+									<div class="self-center">
+										<img
+											id="logo"
+											crossorigin="anonymous"
+											src="{WEBUI_BASE_URL}/static/studio_logo.svg"
+											class="w-25"
+											alt="logo"
+										/>
+									</div>
+								</div>
+
+								{#if $config?.features.enable_ldap && $config?.features.enable_login_form}
+									<div class="mt-2">
+										<button
+											class="flex justify-center items-center text-sm w-full text-center underline"
+											type="button"
+											on:click={() => {
+												if (mode === 'ldap')
+													mode = ($config?.onboarding ?? false) ? 'signup' : 'signin';
+												else mode = 'ldap';
+											}}
+										>
+											<span
+												>{mode === 'ldap'
+													? $i18n.t('Continue with Email')
+													: $i18n.t('Continue with LDAP')}</span
+											>
+										</button>
+									</div>
+								{/if}
+
+								{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
+									<div class="text-sm text-center">
+										<button
+											class="font-medium underline"
+											type="button"
+											on:click={() => {
+												if (mode === 'signin') {
+													mode = 'signup';
+												} else {
+													mode = 'signin';
+												}
+											}}
+										>
+											{mode === 'signin' ? $i18n.t('Sign up Account') : $i18n.t('Sign in Account')}
+										</button>
+									</div>
 								{/if}
 							</div>
 						</form>
@@ -456,29 +472,15 @@
 								{/if}
 							</div>
 						{/if}
-
-						{#if $config?.features.enable_ldap && $config?.features.enable_login_form}
-							<div class="mt-2">
-								<button
-									class="flex justify-center items-center text-xs w-full text-center underline"
-									type="button"
-									on:click={() => {
-										if (mode === 'ldap')
-											mode = ($config?.onboarding ?? false) ? 'signup' : 'signin';
-										else mode = 'ldap';
-									}}
-								>
-									<span
-										>{mode === 'ldap'
-											? $i18n.t('Continue with Email')
-											: $i18n.t('Continue with LDAP')}</span
-									>
-								</button>
-							</div>
-						{/if}
 					</div>
 				{/if}
 			</div>
 		</div>
 	{/if}
 </div>
+
+<style>
+	::-webkit-input-placeholder {
+		color: #98a2b3;
+	}
+</style>

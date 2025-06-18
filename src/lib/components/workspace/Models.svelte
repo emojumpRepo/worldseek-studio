@@ -1,8 +1,8 @@
 <script lang="ts">
-    import ModelSettingDialog from './Models/ModelSettingDialog.svelte';
+	import ModelSettingDialog from './Models/ModelSettingDialog.svelte';
 	import ModelCreateDialog from './Models/ModelCreateDialog.svelte';
 	import { toast } from 'svelte-sonner';
-    import type { Agent } from '$lib/types';
+	import type { Agent } from '$lib/types';
 	import { onMount, getContext, tick } from 'svelte';
 	const i18n = getContext('i18n');
 
@@ -19,32 +19,34 @@
 	import Spinner from '../common/Spinner.svelte';
 	import { eventBus } from '$lib/stores';
 
+	import { WS_FLOW_BASE_URL } from '$lib/constants';
+
 	let shiftKey = false;
 	let loaded = false;
 
-    let selectedAgent: Agent = {
-        id: '',
-        name: '',
-        description: '',
-        access_control: {},
-        base_app_id: '',
-        user_id: '',
-        params: {
-            model: '',
-            prompt: '',
-            knowledge: {
-                settings: {
-                    searchMode: '',
-                    useLimit: 0,
-                    relevance: 0,
-                    contentReordering: false,
-                    optimization: false,
-                },
-                items: [],
-            },
-            tools: [],
-        },
-    }
+	let selectedAgent: Agent = {
+		id: '',
+		name: '',
+		description: '',
+		access_control: {},
+		base_app_id: '',
+		user_id: '',
+		params: {
+			model: '',
+			prompt: '',
+			knowledge: {
+				settings: {
+					searchMode: '',
+					useLimit: 0,
+					relevance: 0,
+					contentReordering: false,
+					optimization: false
+				},
+				items: []
+			},
+			tools: []
+		}
+	};
 
 	let models: Agent[] = [];
 
@@ -63,7 +65,7 @@
 	let searchValue = '';
 
 	const deleteModelHandler = async (e: CustomEvent<Agent>) => {
-        console.log('deleteModelHandler e', e);
+		console.log('deleteModelHandler e', e);
 		const res = await deleteModelById(localStorage.token, e.detail.id).catch((e) => {
 			toast.error($i18n.t(`Model {{name}} Settings Delete Failed`, { name: e.detail.name }));
 			return null;
@@ -71,55 +73,50 @@
 
 		if (res) {
 			toast.success($i18n.t(`Model {{name}} Settings Delete Success`, { name: e.detail.name }));
-            showModelSettingDialog = false;
+			showModelSettingDialog = false;
 		} else {
 			toast.error($i18n.t(`Model {{name}} Settings Delete Failed`, { name: e.detail.name }));
 		}
 
-		await _models.set(
-			await getModels(localStorage.token)
-		);
+		await _models.set(await getModels(localStorage.token));
 		models = await getWorkspaceModels(localStorage.token);
 	};
 
-    const saveModelHandler = async (e: CustomEvent<Agent>) => {
-        const res = await updateModelById(localStorage.token, e.detail.id, e.detail).catch((e) => {
+	const saveModelHandler = async (e: CustomEvent<Agent>) => {
+		console.log('saveModelHandler', e.detail);
+		const res = await updateModelById(localStorage.token, e.detail.id, e.detail).catch((e) => {
 			toast.error($i18n.t(`Model APP Settings Save Failed`));
 			return null;
 		});
 
 		if (res) {
 			toast.success($i18n.t(`Model APP Settings Save Success`));
-            showModelSettingDialog = false;
+			showModelSettingDialog = false;
 		} else {
 			toast.error($i18n.t(`Model APP Settings Save Failed`));
 		}
 
-		await _models.set(
-			await getModels(localStorage.token)
-		);
+		await _models.set(await getModels(localStorage.token));
 		models = await getWorkspaceModels(localStorage.token);
-    }
+	};
 
-    const createModelHandler = async (e: CustomEvent<Agent>) => {
-        console.log('createModelHandler', e.detail);
-        const res = await createNewModel(localStorage.token, e.detail).catch((e) => {
+	const createModelHandler = async (e: CustomEvent<Agent>) => {
+		console.log('createModelHandler', e.detail);
+		const res = await createNewModel(localStorage.token, e.detail).catch((e) => {
 			toast.error($i18n.t(`Model Create Failed`));
 			return null;
 		});
 
 		if (res) {
 			toast.success($i18n.t(`Model Create Success`));
-            showModelCreateDialog = false;
+			showModelCreateDialog = false;
 		} else {
 			toast.error($i18n.t(`Model Create Failed`));
 		}
 
-		await _models.set(
-			await getModels(localStorage.token)
-		);
+		await _models.set(await getModels(localStorage.token));
 		models = await getWorkspaceModels(localStorage.token);
-    }
+	};
 
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
@@ -157,18 +154,22 @@
 
 	// 订阅eventBus的变化
 	$: if ($eventBus.showCreateDialog) {
-        console.log('showCreateDialog', $eventBus.showCreateDialog);
+		console.log('showCreateDialog', $eventBus.showCreateDialog);
 		// 显示创建弹窗
 		showModelCreateDialog = true;
 		// 重置状态
-		eventBus.update(bus => ({ ...bus, showCreateDialog: false }));
+		eventBus.update((bus) => ({ ...bus, showCreateDialog: false }));
 	}
-    
-    // 直接打开创建弹窗
-    const openCreateDialog = () => {
-        console.log('直接打开创建弹窗');
-        showModelCreateDialog = true;
-    };
+
+	// 智能体开发 - 跳转到外部开发网站
+	const navigateToDevelop = () => {
+		window.open(WS_FLOW_BASE_URL, '_blank');
+	};
+
+	const openCreateDialog = () => {
+		console.log('打开新建智能体弹窗');
+		showModelCreateDialog = true;
+	};
 </script>
 
 <svelte:head>
@@ -180,77 +181,212 @@
 {#if loaded}
 	<ModelSettingDialog
 		bind:show={showModelSettingDialog}
-        bind:agent={selectedAgent}
-        on:confirm={saveModelHandler}
-        on:delete={deleteModelHandler}
+		bind:agent={selectedAgent}
+		on:confirm={saveModelHandler}
+		on:delete={deleteModelHandler}
 	/>
 
-	<ModelCreateDialog
-		bind:show={showModelCreateDialog}
-        on:confirm={createModelHandler}
-	/>
+	<ModelCreateDialog bind:show={showModelCreateDialog} on:confirm={createModelHandler} />
 
-    <div class="my-4 mb-5">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold">智能体列表</h2>
-            <button 
-                class="flex items-center gap-1 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                on:click={openCreateDialog}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                </svg>
-                新建智能体
-            </button>
-        </div>
-        <div class="gap-4 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
-            {#each filteredModels as model}
-                <div class="agent-card">
-                    <div class="agent-header">
-                        <div class="agent-avatar">
-                            <span class="agent-initial">{model.name.charAt(0)}</span>
-                        </div>
-                        <div class="agent-info">
-                            <h3 class="agent-name">{model.name}</h3>
-                            <div class="agent-mode {model.access_control ? 'mode-private' : 'mode-public'}">
-                                {#if model.access_control}
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="mode-icon" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span>私有模式</span>
-                                {:else}
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="mode-icon" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0110 2c-1.61 0-3.09.62-4.19 1.64a.75.75 0 010 1.06A5.99 5.99 0 0111 5.3c.3 0 .58.02.86.05.03.3.05.6.05.9V8a3 3 0 01-6 0V7.5a.5.5 0 00-1 0V8a4 4 0 108 0c0-.17-.01-.33-.03-.49a6 6 0 01-9.65 6.11.75.75 0 010-1.06A5.99 5.99 0 0110 14c.34 0 .67-.03 1-.1V10a.75.75 0 000-1.5v3.73c.84-.31 1.63-.84 2.27-1.57a.75.75 0 10-1.38-.91 4.62 4.62 0 01-3.89 2.2c-1.25 0-2.41-.5-3.3-1.29a.75.75 0 00-1.06 0A5.972 5.972 0 0110 18c3.31 0 6-2.69 6-6 0-.32-.03-.63-.08-.93a.748.748 0 00-.26-1.08c-.13-.09-.27-.16-.42-.21h-.01V8a3 3 0 00-3-3 3 3 0 00-3 3 .5.5 0 01-1 0z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span>公开模式</span>
-                                {/if}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="agent-description">
-                        {model.description || '无描述'}
-                    </div>
-                    
-                    <div class="agent-footer">
-                        <button 
-                            class="agent-action-btn"
-                            on:click={() => {
-                                showModelSettingDialog = true;
-                                selectedAgent = model;
-                            }}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            设置
-                        </button>
-                    </div>
-                </div>
-            {/each}
-        </div>
-    </div>
+	<div class="my-4 mb-5">
+		<div class="flex justify-between items-center mb-6">
+			<div class="flex items-center gap-4">
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-white">智能体列表</h2>
+				<div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+					<span class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full font-medium">
+						{filteredModels.length} 个智能体
+					</span>
+				</div>
+			</div>
+			<div class="flex items-center gap-3">
+				<!-- 搜索框 -->
+				<div class="relative">
+					<svg
+						class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+						/>
+					</svg>
+					<input
+						type="text"
+						placeholder="搜索智能体..."
+						bind:value={searchValue}
+						class="pl-10 pr-4 py-2 w-64 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+					/>
+				</div>
+				
+				<!-- 智能体开发按钮 -->
+				<button
+					class="header-btn btn-secondary"
+					on:click={navigateToDevelop}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+						/>
+					</svg>
+					<span class="hidden sm:inline">智能体开发</span>
+					<!-- 外部链接图标 -->
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-3 w-3 ml-1 opacity-60"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+						/>
+					</svg>
+				</button>
+				
+				<!-- 新建智能体按钮 -->
+				<button
+					class="header-btn btn-primary"
+					on:click={openCreateDialog}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					<span>新建智能体</span>
+				</button>
+			</div>
+		</div>
+
+		{#if filteredModels.length === 0}
+			<div class="w-full flex flex-col justify-center items-center gap-4 py-8 mt-15">
+				<div class="text-gray-400">
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-12 w-12"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="1.5"
+							d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+						/>
+					</svg>
+				</div>
+				<p class="text-gray-500 text-lg font-medium">暂无智能体</p>
+				<p class="text-gray-400 text-sm">点击右上角的"+"按钮创建新的智能体</p>
+			</div>
+		{:else}
+			<div class="gap-4 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
+				{#each filteredModels as model}
+					<div class="agent-card">
+						<div class="agent-header">
+							<div class="agent-avatar">
+								<span class="agent-initial">{model.name.charAt(0)}</span>
+							</div>
+							<div class="agent-info">
+								<h3 class="agent-name">{model.name}</h3>
+								<div class="agent-mode {model.access_control ? 'mode-private' : 'mode-public'}">
+									{#if model.access_control}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="mode-icon"
+											viewBox="0 0 20 20"
+											fill="currentColor"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+										<span>私有模式</span>
+									{:else}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="mode-icon"
+											viewBox="0 0 20 20"
+											fill="currentColor"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0110 2c-1.61 0-3.09.62-4.19 1.64a.75.75 0 010 1.06A5.99 5.99 0 0111 5.3c.3 0 .58.02.86.05.03.3.05.6.05.9V8a3 3 0 01-6 0V7.5a.5.5 0 00-1 0V8a4 4 0 108 0c0-.17-.01-.33-.03-.49a6 6 0 01-9.65 6.11.75.75 0 010-1.06A5.99 5.99 0 0110 14c.34 0 .67-.03 1-.1V10a.75.75 0 000-1.5v3.73c.84-.31 1.63-.84 2.27-1.57a.75.75 0 10-1.38-.91 4.62 4.62 0 01-3.89 2.2c-1.25 0-2.41-.5-3.3-1.29a.75.75 0 00-1.06 0A5.972 5.972 0 0110 18c3.31 0 6-2.69 6-6 0-.32-.03-.63-.08-.93a.748.748 0 00-.26-1.08c-.13-.09-.27-.16-.42-.21h-.01V8a3 3 0 00-3-3 3 3 0 00-3 3 .5.5 0 01-1 0z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+										<span>公开模式</span>
+									{/if}
+								</div>
+							</div>
+						</div>
+
+						<div class="agent-description">
+							{model.description || '无描述'}
+						</div>
+
+						<div class="agent-footer">
+							<button
+								class="agent-action-btn"
+								on:click={() => {
+									showModelSettingDialog = true;
+									selectedAgent = model;
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-5 w-5"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+									/>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+									/>
+								</svg>
+								设置
+							</button>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
 {:else}
 	<div class="w-full h-full flex justify-center items-center">
 		<Spinner />
@@ -258,185 +394,256 @@
 {/if}
 
 <style>
-    .agent-card {
-        background-color: white;
-        border-radius: 12px;
-        padding: 20px;
-        border: 1px solid #e5e7eb;
-        transition: all 0.15s ease;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
+	/* 头部按钮样式 */
+	.header-btn {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 16px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		border-radius: 8px;
+		transition: all 0.2s ease;
+		border: 1px solid transparent;
+		cursor: pointer;
+		white-space: nowrap;
+	}
 
-    .agent-card:hover {
-        border-color: #3b82f6;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
-    }
-    
-    .agent-header {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 14px;
-    }
-    
-    .agent-avatar {
-        width: 42px;
-        height: 42px;
-        border-radius: 10px;
-        background-color: #e0e7ff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-    
-    .agent-initial {
-        font-weight: 600;
-        font-size: 18px;
-        color: #4f46e5;
-    }
-    
-    .agent-info {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-    
-    .agent-name {
-        font-weight: 600;
-        font-size: 1rem;
-        color: #111827;
-        margin: 0;
-    }
-    
-    .agent-mode {
-        font-size: 0.75rem;
-        padding: 2px 8px;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        width: fit-content;
-    }
-    
-    .mode-icon {
-        width: 14px;
-        height: 14px;
-    }
+	.btn-primary {
+		background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+		color: white;
+		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+	}
 
-    .mode-public {
-        color: #047857;
-        background-color: #ECFDF5;
-        border: 1px solid #A7F3D0;
-    }
+	.btn-primary:hover {
+		background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+		box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+		transform: translateY(-1px);
+	}
 
-    .mode-private {
-        color: #7C3AED;
-        background-color: #F5F3FF;
-        border: 1px solid #DDD6FE;
-    }
+	.btn-primary:active {
+		transform: translateY(0);
+		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+	}
 
-    :global(.dark) .mode-public {
-        color: #10B981;
-        background-color: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.2);
-    }
+	.btn-secondary {
+		background-color: white;
+		color: #6b7280;
+		border-color: #e5e7eb;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	}
 
-    :global(.dark) .mode-private {
-        color: #A78BFA;
-        background-color: rgba(167, 139, 250, 0.1);
-        border: 1px solid rgba(167, 139, 250, 0.2);
-    }
-    
-    .agent-description {
-        font-size: 0.9rem;
-        color: #4b5563;
-        flex-grow: 1;
-        line-height: 1.5;
-        margin-bottom: 16px;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-    
-    .agent-footer {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: auto;
-        padding-top: 12px;
-        border-top: 1px solid #f3f4f6;
-    }
-    
-    .agent-action-btn {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 12px;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #4b5563;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-        background-color: #f9fafb;
-        transition: all 0.15s ease;
-    }
-    
-    .agent-action-btn:hover {
-        background-color: #f3f4f6;
-        border-color: #d1d5db;
-        color: #1f2937;
-    }
+	.btn-secondary:hover {
+		background-color: #f9fafb;
+		color: #374151;
+		border-color: #d1d5db;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
 
-    @media (prefers-color-scheme: dark) {
-        .agent-card {
-            background-color: #1f2937;
-            border-color: #374151;
-        }
-        
-        .agent-card:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-        }
-        
-        .agent-avatar {
-            background-color: #2e3a4f;
-        }
-        
-        .agent-initial {
-            color: #93c5fd;
-        }
-        
-        .agent-name {
-            color: #f3f4f6;
-        }
-        
-        .agent-mode {
-            background-color: #374151;
-            color: #d1d5db;
-        }
-        
-        .agent-description {
-            color: #d1d5db;
-        }
-        
-        .agent-footer {
-            border-top-color: #374151;
-        }
-        
-        .agent-action-btn {
-            background-color: #374151;
-            border-color: #4b5563;
-            color: #e5e7eb;
-        }
-        
-        .agent-action-btn:hover {
-            background-color: #4b5563;
-            border-color: #6b7280;
-            color: #f9fafb;
-        }
-    }
+	/* 暗色模式支持 */
+	:global(.dark) .btn-secondary {
+		background-color: #374151;
+		color: #d1d5db;
+		border-color: #4b5563;
+	}
+
+	:global(.dark) .btn-secondary:hover {
+		background-color: #4b5563;
+		color: #f3f4f6;
+		border-color: #6b7280;
+	}
+
+	/* 响应式设计 */
+	@media (max-width: 640px) {
+		.header-btn {
+			padding: 8px 12px;
+			font-size: 0.8rem;
+		}
+		
+		.header-btn span {
+			display: none;
+		}
+	}
+
+	.agent-card {
+		background-color: white;
+		border-radius: 12px;
+		padding: 20px;
+		border: 1px solid #e5e7eb;
+		transition: all 0.15s ease;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+	}
+
+	.agent-card:hover {
+		border-color: #3b82f6;
+		box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+	}
+
+	.agent-header {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		margin-bottom: 14px;
+	}
+
+	.agent-avatar {
+		width: 42px;
+		height: 42px;
+		border-radius: 10px;
+		background-color: #e0e7ff;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+
+	.agent-initial {
+		font-weight: 600;
+		font-size: 18px;
+		color: #4f46e5;
+	}
+
+	.agent-info {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.agent-name {
+		font-weight: 600;
+		font-size: 1rem;
+		color: #111827;
+		margin: 0;
+	}
+
+	.agent-mode {
+		font-size: 0.75rem;
+		padding: 2px 8px;
+		border-radius: 20px;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		width: fit-content;
+	}
+
+	.mode-icon {
+		width: 14px;
+		height: 14px;
+	}
+
+	.mode-public {
+		color: #047857;
+		background-color: #ecfdf5;
+		border: 1px solid #a7f3d0;
+	}
+
+	.mode-private {
+		color: #7c3aed;
+		background-color: #f5f3ff;
+		border: 1px solid #ddd6fe;
+	}
+
+	:global(.dark) .mode-public {
+		color: #10b981;
+		background-color: rgba(16, 185, 129, 0.1);
+		border: 1px solid rgba(16, 185, 129, 0.2);
+	}
+
+	:global(.dark) .mode-private {
+		color: #a78bfa;
+		background-color: rgba(167, 139, 250, 0.1);
+		border: 1px solid rgba(167, 139, 250, 0.2);
+	}
+
+	.agent-description {
+		font-size: 0.9rem;
+		color: #4b5563;
+		flex-grow: 1;
+		line-height: 1.5;
+		margin-bottom: 16px;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.agent-footer {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: auto;
+		padding-top: 12px;
+		border-top: 1px solid #f3f4f6;
+	}
+
+	.agent-action-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 12px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #4b5563;
+		border-radius: 8px;
+		border: 1px solid #e5e7eb;
+		background-color: #f9fafb;
+		transition: all 0.15s ease;
+	}
+
+	.agent-action-btn:hover {
+		background-color: #f3f4f6;
+		border-color: #d1d5db;
+		color: #1f2937;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.agent-card {
+			background-color: #1f2937;
+			border-color: #374151;
+		}
+
+		.agent-card:hover {
+			border-color: #3b82f6;
+			box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+		}
+
+		.agent-avatar {
+			background-color: #2e3a4f;
+		}
+
+		.agent-initial {
+			color: #93c5fd;
+		}
+
+		.agent-name {
+			color: #f3f4f6;
+		}
+
+		.agent-mode {
+			background-color: #374151;
+			color: #d1d5db;
+		}
+
+		.agent-description {
+			color: #d1d5db;
+		}
+
+		.agent-footer {
+			border-top-color: #374151;
+		}
+
+		.agent-action-btn {
+			background-color: #374151;
+			border-color: #4b5563;
+			color: #e5e7eb;
+		}
+
+		.agent-action-btn:hover {
+			background-color: #4b5563;
+			border-color: #6b7280;
+			color: #f9fafb;
+		}
+	}
 </style>

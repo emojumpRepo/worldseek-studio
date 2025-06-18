@@ -2693,3 +2693,39 @@ LDAP_CA_CERT_FILE = PersistentConfig(
 LDAP_CIPHERS = PersistentConfig(
     "LDAP_CIPHERS", "ldap.server.ciphers", os.environ.get("LDAP_CIPHERS", "ALL")
 )
+
+# 请求超时配置
+REQUEST_TIMEOUT = 180  # 设置请求超时时间为180秒
+
+# 获取环境变量或使用默认值
+def get_env(key: str, default: Optional[str] = None) -> str:
+    return os.environ.get(key, default)
+
+# 获取主机名和端口
+def get_host_url(default_host: str = "localhost", default_port: str = "80", default_protocol: str = "http") -> str:
+    host = get_env("HOST", default_host)
+    port = get_env("PORT", default_port)
+    protocol = get_env("PROTOCOL", default_protocol)
+    
+    if port == "80" and protocol == "http" or port == "443" and protocol == "https":
+        return f"{protocol}://{host}"
+    else:
+        return f"{protocol}://{host}:{port}"
+
+# 基础URL配置
+BASE_URL = get_host_url()
+
+# FastGPT配置
+FASTGPT_HOST = get_env("FASTGPT_HOST", "192.168.5.48")
+FASTGPT_PORT = get_env("FASTGPT_PORT", "3001")
+FASTGPT_PROTOCOL = get_env("FASTGPT_PROTOCOL", "http")
+FASTGPT_BASE_URL = f"{FASTGPT_PROTOCOL}://{FASTGPT_HOST}:{FASTGPT_PORT}"
+FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-h9CtpSg9sDYRFW6c1QDZ9pw0kGWmHde3y1weZz1eNoWh3L1QVu9ui3D9TajcnAFG")
+
+# Langflow配置
+LANGFLOW_HOST = get_env("LANGFLOW_HOST", "localhost")
+LANGFLOW_PORT = get_env("LANGFLOW_PORT", "3000")
+LANGFLOW_PROTOCOL = get_env("LANGFLOW_PROTOCOL", "http")
+LANGFLOW_API_BASE_URL = f"{LANGFLOW_PROTOCOL}://{LANGFLOW_HOST}:{LANGFLOW_PORT}/api/v1"
+LANGFLOW_BASE_URL = f"{LANGFLOW_API_BASE_URL}/run/"
+LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-eYIKD8iGgnKHNZSha3GPgmXO_q80ir385yF_mL90238")

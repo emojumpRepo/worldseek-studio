@@ -15,6 +15,7 @@
 	import { toast } from 'svelte-sonner';
 	import { getChatList, updateChatById } from '$lib/apis/chats';
 	import { copyToClipboard, extractCurlyBraceWords } from '$lib/utils';
+	import { marked } from 'marked';
 
 	import Message from './Messages/Message.svelte';
 	import Loader from '../common/Loader.svelte';

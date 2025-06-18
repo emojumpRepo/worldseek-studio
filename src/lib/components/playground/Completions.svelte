@@ -39,61 +39,81 @@
 	};
 
 	const handleLangflowStream = async (res) => {
-		if (!res || !res.body) {
-			console.error('Invalid response from Langflow streaming API');
-			return;
-		}
-
-		const reader = res.body.getReader();
-		const decoder = new TextDecoder('utf-8');
 		let streamContent = '';
 
 		try {
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+			if (res.body) {
+				const reader = res.body.getReader();
+				const decoder = new TextDecoder('utf-8');
+				let receivedCompleteResponse = false; // 标记是否收到了完整响应
 
-				const chunk = decoder.decode(value, { stream: true });
-				const lines = chunk.split('\n');
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
 
-				for (const line of lines) {
-					if (line.startsWith('data:')) {
-						const data = line.slice(5).trim();
-						if (data === '[DONE]') continue;
+					const chunk = decoder.decode(value, { stream: true });
+					const lines = chunk.split('\n');
 
-						try {
-							const jsonData = JSON.parse(data);
-							
-							// 检查错误
-							if (jsonData.error) {
-								console.error('Langflow stream error:', jsonData.error);
-								toast.error(`Error: ${jsonData.error.detail || 'Error in Langflow stream'}`);
-								continue;
+					for (const line of lines) {
+						if (line.startsWith('data:')) {
+							const data = line.slice(5).trim();
+							if (data === '[DONE]') continue;
+
+							try {
+								const jsonData = JSON.parse(data);
+								
+								// 检查错误
+								if (jsonData.error) {
+									console.error('Langflow stream error:', jsonData.error);
+									toast.error(`Error: ${jsonData.error.detail || 'Error in Langflow stream'}`);
+									continue;
+								}
+								
+								// 处理完整响应消息
+								if (jsonData.id === 'langflow-complete' && jsonData.complete === true) {
+									console.log('收到完整响应内容，长度：', jsonData.content.length);
+									// 如果后端提供了完整内容，则使用后端的完整内容
+									if (jsonData.content && jsonData.content.length > 0) {
+										streamContent = jsonData.content;
+										text = streamContent;
+										receivedCompleteResponse = true;
+										await tick();
+										scrollToBottom();
+									}
+									continue;
+								}
+
+								// 从不同格式中提取内容
+								let messageContent = '';
+								if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
+									// OpenAI格式
+									messageContent = jsonData.choices[0].delta.content;
+								} else if (jsonData.text) {
+									// 纯文本格式
+									messageContent = jsonData.text;
+								} else if (jsonData.response) {
+									// Langflow特定格式
+									messageContent = jsonData.response;
+								}
+
+								if (messageContent) {
+									streamContent += messageContent;
+									text += messageContent;
+									await tick();
+									scrollToBottom();
+								}
+							} catch (e) {
+								console.error('Error parsing JSON from stream:', e, data);
 							}
-
-							// 从不同格式中提取内容
-							let messageContent = '';
-							if (jsonData.choices && jsonData.choices[0]?.delta?.content) {
-								// OpenAI格式
-								messageContent = jsonData.choices[0].delta.content;
-							} else if (jsonData.text) {
-								// 纯文本格式
-								messageContent = jsonData.text;
-							} else if (jsonData.response) {
-								// Langflow特定格式
-								messageContent = jsonData.response;
-							}
-
-							if (messageContent) {
-								streamContent += messageContent;
-								text += messageContent;
-								await tick();
-								scrollToBottom();
-							}
-						} catch (e) {
-							console.error('Error parsing JSON from stream:', e, data);
 						}
 					}
+				}
+				
+				// 流式完成后记录日志
+				if (receivedCompleteResponse) {
+					console.log('流式响应完成，使用后端提供的完整内容');
+				} else {
+					console.log('流式响应完成，使用前端累积的内容');
 				}
 			}
 		} catch (error) {
@@ -116,6 +136,7 @@
 			const res = await runLangflowWorkflow(
 				localStorage.token,
 				model.base_app_id,
+				model.id,
 				[
 					{
 						role: 'assistant',

@@ -1053,70 +1053,74 @@ export const archiveAllChats = async (token: string) => {
 	return res;
 };
 
+interface WorkflowParams {
+	stream?: boolean;
+	[key: string]: any;
+}
+
+interface WorkflowMessage {
+	role: string;
+	content: string;
+}
+
 export const runLangflowWorkflow = async (
 	token: string = '',
 	workflowId: string,
-	messages: Array<{role: string, content: string}>,
-	params: any = {}
+	agentId: string,
+	messages: WorkflowMessage[],
+	params: WorkflowParams = {}
 ) => {
-	let error = null;
+	const headers = {
+		'Accept': 'application/json',
+		'Content-Type': 'application/json',
+		'Authorization': `Bearer ${token}`
+	};
+
+	const body = {
+		workflow_id: workflowId,
+		agent_id: agentId,
+		messages,
+		params
+	};
 
 	// 处理流式响应的情况
 	if (params.stream === true) {
 		try {
 			const response = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
 				method: 'POST',
-				headers: {
-					Accept: 'application/json',
-					'Content-Type': 'application/json',
-					authorization: `Bearer ${token}`
-				},
-				body: JSON.stringify({
-					workflow_id: workflowId,
-					messages,
-					params
-				})
+				headers,
+				body: JSON.stringify(body)
 			});
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				throw errorData?.detail ?? 'Connection error';
+				throw new Error(errorData?.detail || '请求失败');
 			}
 
 			// 返回原始响应对象，由调用方处理流
 			return response;
 		} catch (err) {
-			error = `Langflow workflow streaming: ${err?.detail ?? 'Connection error'}`;
-			throw error;
+			const errorMessage = err instanceof Error ? err.message : '未知错误';
+			throw new Error(`Langflow workflow streaming: ${errorMessage}`);
 		}
 	}
 
 	// 非流式响应的处理逻辑
-	const res = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify({
-			workflow_id: workflowId,
-			messages,
-			params
-		})
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			error = `Langflow workflow: ${err?.detail ?? 'Connection error'}`;
-			return null;
+	try {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify(body)
 		});
 
-	if (error) {
-		throw error;
-	}
+		if (!response.ok) {
+			const errorData = await response.json();
+			throw new Error(errorData?.detail || '请求失败');
+		}
 
-	return res;
+		return await response.json();
+	} catch (err) {
+		const errorMessage = err instanceof Error ? err.message : '未知错误';
+		throw new Error(`Langflow workflow: ${errorMessage}`);
+	}
 };
