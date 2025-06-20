@@ -103,6 +103,7 @@ if "sqlite" in SQLALCHEMY_DATABASE_URL:
     )
 else:
     if DATABASE_POOL_SIZE > 0:
+        # 使用配置的连接池设置
         engine = create_engine(
             SQLALCHEMY_DATABASE_URL,
             pool_size=DATABASE_POOL_SIZE,
@@ -111,11 +112,48 @@ else:
             pool_recycle=DATABASE_POOL_RECYCLE,
             pool_pre_ping=True,
             poolclass=QueuePool,
+            # 添加连接池事件监听
+            echo_pool=True,  # 启用连接池日志
         )
     else:
+        # 使用优化的默认连接池设置而不是NullPool
         engine = create_engine(
-            SQLALCHEMY_DATABASE_URL, pool_pre_ping=True, poolclass=NullPool
+            SQLALCHEMY_DATABASE_URL,
+            pool_size=10,  # 默认连接池大小
+            max_overflow=5,  # 默认溢出连接
+            pool_timeout=20,  # 默认超时时间
+            pool_recycle=1800,  # 默认连接回收时间(30分钟)
+            pool_pre_ping=True,
+            poolclass=QueuePool,
+            echo_pool=True,  # 启用连接池日志
         )
+
+# 添加连接池监控事件
+from sqlalchemy import event
+from sqlalchemy.pool import Pool
+
+@event.listens_for(Pool, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """为新连接设置优化参数"""
+    if 'sqlite' not in SQLALCHEMY_DATABASE_URL:
+        # 对于PostgreSQL连接，设置一些优化参数
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("SET statement_timeout = '300s'")  # 5分钟查询超时
+            cursor.execute("SET idle_in_transaction_session_timeout = '60s'")  # 1分钟事务空闲超时
+            cursor.close()
+        except Exception as e:
+            log.warning(f"设置数据库连接参数失败: {e}")
+
+@event.listens_for(Pool, "checkout")
+def receive_checkout(dbapi_connection, connection_record, connection_proxy):
+    """连接被检出时的事件"""
+    log.debug("数据库连接被检出")
+
+@event.listens_for(Pool, "checkin")
+def receive_checkin(dbapi_connection, connection_record):
+    """连接被归还时的事件"""
+    log.debug("数据库连接被归还")
 
 
 SessionLocal = sessionmaker(

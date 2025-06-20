@@ -193,7 +193,7 @@
 			<div class="flex items-center gap-4">
 				<h2 class="text-2xl font-bold text-gray-900 dark:text-white">智能体列表</h2>
 				<div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-					<span class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full font-medium">
+					<span class="px-2 py-1 bg-black text-white rounded-full font-medium">
 						{filteredModels.length} 个智能体
 					</span>
 				</div>
@@ -410,20 +410,23 @@
 	}
 
 	.btn-primary {
-		background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+		background: linear-gradient(135deg, #646464 0%, #0a0a0a 100%);
 		color: white;
-		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+		border-radius: 8px;
+		font-weight: 500;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 	}
 
 	.btn-primary:hover {
-		background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-		box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+		background: linear-gradient(135deg, #333333 0%, #111111 100%);
+		box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 		transform: translateY(-1px);
 	}
 
 	.btn-primary:active {
 		transform: translateY(0);
-		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+		background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	.btn-secondary {

@@ -183,15 +183,14 @@ class ModelsTable:
             return [WorkflowModel.model_validate_workflow(model) for model in db.query(Workflow).all()]
 
     def get_workflows(self, user_id: str = None, user_role: str = None) -> list[WorkflowResponse]:
+        workflows = []
         try:
             with get_db() as db:
-                workflows = []
                 all_workflows = db.query(Workflow).all()
+                log.info(f"查询到 {len(all_workflows)} 个工作流")
                 
                 for workflow in all_workflows:
                     try:
-                        print(f"处理workflow: {workflow.id}")
-                        
                         # 安全地处理params字段
                         params = {}
                         if workflow.params is not None:
@@ -200,7 +199,7 @@ class ModelsTable:
                                     import json
                                     params = json.loads(workflow.params)
                                 except json.JSONDecodeError:
-                                    print(f"JSON解析失败，使用空字典: {workflow.params}")
+                                    log.warning(f"JSON解析失败，使用空字典: {workflow.params}")
                                     params = {}
                             elif isinstance(workflow.params, dict):
                                 params = workflow.params
@@ -218,25 +217,20 @@ class ModelsTable:
                             "created_at": workflow.created_at or int(time.time())
                         }
                         
-                        try:
-                            # 验证并创建响应对象
-                            workflow_response = WorkflowResponse.model_validate(workflow_data)
-                            workflows.append(workflow_response)
-                        except Exception as workflow_err:
-                            print(f"响应对象验证失败: {workflow_err}")
-                            print(f"workflow数据: {workflow_data}")
-                            continue
-                    
+                        # 验证并创建响应对象
+                        workflow_response = WorkflowResponse.model_validate(workflow_data)
+                        workflows.append(workflow_response)
+                        
                     except Exception as workflow_err:
-                        print(f"处理单个workflow时出错: {workflow_err}")
+                        log.error(f"处理单个workflow时出错: {workflow_err}")
                         continue
                 
-                print(f"成功处理 {len(workflows)} 条记录")
+                log.info(f"成功处理 {len(workflows)} 条记录")
                 return workflows
                 
         except Exception as e:
-            print(f"get_workflows方法发生异常: {e}")
-            return []
+            log.error(f"get_workflows方法发生异常: {e}")
+            return workflows  # 返回已处理的workflows而不是空列表
 
     def get_workflow_by_id(self, id: str) -> Optional[WorkflowModel]:
         try:

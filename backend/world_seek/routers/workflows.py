@@ -159,10 +159,10 @@ async def get_workflows(
     try:
         log.info("从Langflow获取最新工作流数据")
         async with aiohttp.ClientSession() as session:
-            url = f"{LANGFLOW_API_BASE_URL}/flows/?remove_example_flows=true&components_only=false&get_all=true&header_flows=false&page=1&size=50"
+            url = f"{LANGFLOW_API_BASE_URL}/flows/?remove_example_flows=true&components_only=false&get_all=true&header_flows=false&page=1&size=1000"
             headers = {
                 "Authorization": LANGFLOW_TOKEN,
-                "Content-Type": "application/json"
+                "accept": "application/json"
             }
 
             log.info(f"发送请求到Langflow: URL={url}")

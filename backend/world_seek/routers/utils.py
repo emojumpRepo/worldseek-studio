@@ -125,6 +125,65 @@ async def download_db(user=Depends(get_admin_user)):
         filename="webui.db",
     )
 
+@router.get("/db/pool-status")
+async def get_db_pool_status(user=Depends(get_admin_user)):
+    """获取数据库连接池状态"""
+    from world_seek.internal.db import engine
+    
+    if hasattr(engine.pool, 'size'):
+        pool_info = {
+            "pool_size": engine.pool.size(),
+            "checked_in": engine.pool.checkedin(),
+            "checked_out": engine.pool.checkedout(),
+            "overflow": engine.pool.overflow(),
+            "invalid": engine.pool.invalid(),
+        }
+        
+        # 计算使用率
+        total_connections = pool_info["checked_in"] + pool_info["checked_out"]
+        max_connections = engine.pool._max_overflow + engine.pool._pool_size
+        usage_percentage = (total_connections / max_connections * 100) if max_connections > 0 else 0
+        
+        pool_info.update({
+            "total_connections": total_connections,
+            "max_connections": max_connections,
+            "usage_percentage": round(usage_percentage, 2),
+            "status": "healthy" if usage_percentage < 80 else "warning" if usage_percentage < 95 else "critical"
+        })
+        
+        return pool_info
+    else:
+        return {"message": "连接池信息不可用", "pool_type": str(type(engine.pool))}
+
+@router.post("/db/pool-reset")
+async def reset_db_pool(user=Depends(get_admin_user)):
+    """重置数据库连接池（谨慎使用）"""
+    from world_seek.internal.db import engine
+    
+    try:
+        # 记录重置前的状态
+        if hasattr(engine.pool, 'size'):
+            before_status = {
+                "checked_out": engine.pool.checkedout(),
+                "checked_in": engine.pool.checkedin(),
+            }
+        else:
+            before_status = {"message": "无法获取重置前状态"}
+        
+        # 执行连接池重置
+        engine.pool.dispose()
+        
+        return {
+            "message": "数据库连接池已重置",
+            "before_status": before_status,
+            "timestamp": int(time.time())
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"重置连接池失败: {str(e)}"
+        )
+
 
 @router.get("/litellm/config")
 async def download_litellm_config_yaml(user=Depends(get_admin_user)):

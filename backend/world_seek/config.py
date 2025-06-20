@@ -2716,16 +2716,33 @@ def get_host_url(default_host: str = "localhost", default_port: str = "80", defa
 BASE_URL = get_host_url()
 
 # FastGPT配置
-FASTGPT_HOST = get_env("FASTGPT_HOST", "192.168.5.48")
-FASTGPT_PORT = get_env("FASTGPT_PORT", "3001")
+FASTGPT_HOST = get_env("FASTGPT_HOST", "uat.worldseek-ai.com")
+FASTGPT_PORT = get_env("FASTGPT_PORT", "4000")
 FASTGPT_PROTOCOL = get_env("FASTGPT_PROTOCOL", "http")
 FASTGPT_BASE_URL = f"{FASTGPT_PROTOCOL}://{FASTGPT_HOST}:{FASTGPT_PORT}"
-FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-h9CtpSg9sDYRFW6c1QDZ9pw0kGWmHde3y1weZz1eNoWh3L1QVu9ui3D9TajcnAFG")
+FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-jys4wT8izKeASfc07f1qNeAX6g6lzWA5DtBFc0CEklmZIQM8AzS6Zr0")
 
 # Langflow配置
-LANGFLOW_HOST = get_env("LANGFLOW_HOST", "localhost")
-LANGFLOW_PORT = get_env("LANGFLOW_PORT", "3000")
+LANGFLOW_HOST = get_env("LANGFLOW_HOST", "uat.worldseek-ai.com")
+LANGFLOW_PORT = get_env("LANGFLOW_PORT", "5000")
 LANGFLOW_PROTOCOL = get_env("LANGFLOW_PROTOCOL", "http")
 LANGFLOW_API_BASE_URL = f"{LANGFLOW_PROTOCOL}://{LANGFLOW_HOST}:{LANGFLOW_PORT}/api/v1"
 LANGFLOW_BASE_URL = f"{LANGFLOW_API_BASE_URL}/run/"
-LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-eYIKD8iGgnKHNZSha3GPgmXO_q80ir385yF_mL90238")
+LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-NSjt-oxq5cHlvK97mMsXy9tYYBwCiqmV3cdDV3Rguf8")
+
+# 数据库连接池优化配置
+DATABASE_POOL_SIZE_DEFAULT = int(os.environ.get("DATABASE_POOL_SIZE", 20))
+DATABASE_POOL_MAX_OVERFLOW_DEFAULT = int(os.environ.get("DATABASE_POOL_MAX_OVERFLOW", 30))
+DATABASE_POOL_TIMEOUT_DEFAULT = int(os.environ.get("DATABASE_POOL_TIMEOUT", 30))
+DATABASE_POOL_RECYCLE_DEFAULT = int(os.environ.get("DATABASE_POOL_RECYCLE", 3600))  # 1小时
+
+# 优化配置建议：减少连接池大小并增加回收频率
+OPTIMIZED_DATABASE_POOL_SIZE = 10  # 减少连接池大小
+OPTIMIZED_DATABASE_POOL_MAX_OVERFLOW = 5  # 减少溢出连接
+OPTIMIZED_DATABASE_POOL_TIMEOUT = 20  # 减少超时时间
+OPTIMIZED_DATABASE_POOL_RECYCLE = 1800  # 30分钟回收连接
+
+# 添加连接池监控日志
+import logging
+db_pool_logger = logging.getLogger('sqlalchemy.pool')
+db_pool_logger.setLevel(logging.INFO)

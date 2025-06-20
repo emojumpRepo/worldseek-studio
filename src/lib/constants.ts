@@ -3,10 +3,11 @@ import { browser, dev } from '$app/environment';
 
 export const APP_NAME = 'WorldSeek Studio';
 
-export const WEBUI_HOSTNAME = browser ? (dev ? `${location.hostname}` : `${location.host}`) : '';
+export const WEBUI_HOSTNAME = browser ? (dev ? `${location.hostname}:8080` : `${location.host}`) : '';
 export const WEBUI_BASE_URL = browser ? (dev ? `http://${WEBUI_HOSTNAME}` : `http://${WEBUI_HOSTNAME}`) : ``;
 
-export const WS_FLOW_BASE_URL = `http://${location.hostname}:5000/ws-flow`;
+export const WS_FLOW_BASE_URL = `http://${location.hostname}:5000`;
+export const WS_KB_BASE_URL = `http://${location.hostname}:4000`;
 
 export const WEBUI_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1`;
 
