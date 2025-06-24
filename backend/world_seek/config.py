@@ -2716,25 +2716,25 @@ def get_host_url(default_host: str = "localhost", default_port: str = "80", defa
 BASE_URL = get_host_url()
 
 # FastGPT配置
-# FASTGPT_HOST = get_env("FASTGPT_HOST", "uat.worldseek-ai.com")
-FASTGPT_HOST = get_env("FASTGPT_HOST", "192.168.5.48")
-# FASTGPT_PORT = get_env("FASTGPT_PORT", "4000")
-FASTGPT_PORT = get_env("FASTGPT_PORT", "3001")
+FASTGPT_HOST = get_env("FASTGPT_HOST", "uat.worldseek-ai.com")
+# FASTGPT_HOST = get_env("FASTGPT_HOST", "192.168.5.48")
+FASTGPT_PORT = get_env("FASTGPT_PORT", "4000")
+# FASTGPT_PORT = get_env("FASTGPT_PORT", "3001")
 FASTGPT_PROTOCOL = get_env("FASTGPT_PROTOCOL", "http")
 FASTGPT_BASE_URL = f"{FASTGPT_PROTOCOL}://{FASTGPT_HOST}:{FASTGPT_PORT}"
-# FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-jys4wT8izKeASfc07f1qNeAX6g6lzWA5DtBFc0CEklmZIQM8AzS6Zr0")
-FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-gmwtywQ8zvWbULPcCNtr0ATdRGdwbj1RkUy9SOG0kSEdbNxESYlAUPpxq")
+FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-jys4wT8izKeASfc07f1qNeAX6g6lzWA5DtBFc0CEklmZIQM8AzS6Zr0")
+# FASTGPT_TOKEN = get_env("FASTGPT_TOKEN", "fastgpt-gmwtywQ8zvWbULPcCNtr0ATdRGdwbj1RkUy9SOG0kSEdbNxESYlAUPpxq")
 
 # Langflow配置
-# LANGFLOW_HOST = get_env("LANGFLOW_HOST", "uat.worldseek-ai.com")
-LANGFLOW_HOST = get_env("LANGFLOW_HOST", "localhost")
-# LANGFLOW_PORT = get_env("LANGFLOW_PORT", "5000")
-LANGFLOW_PORT = get_env("LANGFLOW_PORT", "3001")
+LANGFLOW_HOST = get_env("LANGFLOW_HOST", "uat.worldseek-ai.com")
+# LANGFLOW_HOST = get_env("LANGFLOW_HOST", "localhost")
+LANGFLOW_PORT = get_env("LANGFLOW_PORT", "5000")
+# LANGFLOW_PORT = get_env("LANGFLOW_PORT", "3001")
 LANGFLOW_PROTOCOL = get_env("LANGFLOW_PROTOCOL", "http")
 LANGFLOW_API_BASE_URL = f"{LANGFLOW_PROTOCOL}://{LANGFLOW_HOST}:{LANGFLOW_PORT}/api/v1"
 LANGFLOW_BASE_URL = f"{LANGFLOW_API_BASE_URL}/run/"
-# LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-NSjt-oxq5cHlvK97mMsXy9tYYBwCiqmV3cdDV3Rguf8")
-LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-CO4avRYkGpC-F3KbODtEFE-Oe9XH2gguTmbDBHIT_tg")
+LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-NSjt-oxq5cHlvK97mMsXy9tYYBwCiqmV3cdDV3Rguf8")
+# LANGFLOW_TOKEN = get_env("LANGFLOW_TOKEN", "sk-CO4avRYkGpC-F3KbODtEFE-Oe9XH2gguTmbDBHIT_tg")
 
 # 数据库连接池优化配置
 DATABASE_POOL_SIZE_DEFAULT = int(os.environ.get("DATABASE_POOL_SIZE", 20))
