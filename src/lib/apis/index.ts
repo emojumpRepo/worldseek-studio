@@ -1490,3 +1490,67 @@ export const updateModelConfig = async (token: string, config: GlobalModelConfig
 
 	return res;
 };
+
+// API密钥配置相关API
+export const getApiKeysConfig = async (token: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/api-keys`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.log(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const updateApiKeysConfig = async (
+	token: string,
+	config: {
+		langflow_api_key?: string;
+		langflow_base_url?: string;
+		fastgpt_api_key?: string;
+		fastgpt_base_url?: string;
+	}
+) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/api-keys`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(config)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.log(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};

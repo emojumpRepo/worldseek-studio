@@ -394,41 +394,6 @@
 {/if}
 
 <style>
-	/* 头部按钮样式 */
-	.header-btn {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 16px;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border-radius: 8px;
-		transition: all 0.2s ease;
-		border: 1px solid transparent;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-
-	.btn-primary {
-		background: linear-gradient(135deg, #646464 0%, #0a0a0a 100%);
-		color: white;
-		border-radius: 8px;
-		font-weight: 500;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-	}
-
-	.btn-primary:hover {
-		background: linear-gradient(135deg, #333333 0%, #111111 100%);
-		box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-		transform: translateY(-1px);
-	}
-
-	.btn-primary:active {
-		transform: translateY(0);
-		background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.2);
-	}
-
 	.btn-secondary {
 		background-color: white;
 		color: #6b7280;

@@ -23,8 +23,8 @@ from world_seek.constants import ERROR_MESSAGES
 from world_seek.utils.auth import get_admin_user, get_verified_user
 from world_seek.utils.access_control import has_access, has_permission
 from world_seek.utils.workflow import call_langflow_api
-from world_seek.env import SRC_LOG_LEVELS
-from world_seek.config import FASTGPT_BASE_URL, FASTGPT_TOKEN, REQUEST_TIMEOUT, LANGFLOW_BASE_URL, LANGFLOW_API_BASE_URL, LANGFLOW_TOKEN
+from world_seek.config import FASTGPT_BASE_URL, REQUEST_TIMEOUT, LANGFLOW_BASE_URL, LANGFLOW_API_BASE_URL
+from world_seek.models.user_api_configs import ApiKeys
 
 # 配置日志
 log = logging.getLogger(__name__)
@@ -141,6 +141,7 @@ router = APIRouter()
 @router.get("/", response_model=List[WorkflowResponse])
 async def get_workflows(
     id: Optional[str] = None,
+    sync: bool = False,
     user=Depends(get_verified_user)
 ) -> List[WorkflowResponse]:
     """
@@ -148,28 +149,49 @@ async def get_workflows(
     
     Args:
         id: 可选的工作流ID
+        sync: 是否同步WorldSeek Agent数据，默认为False（仅查询数据库）
         user: 当前用户
         
     Returns:
         工作流列表
     """
-    log.info(f"获取工作流列表: 用户ID={user.id}, 角色={user.role}")
+    log.info(f"获取工作流列表: 用户ID={user.id}, 角色={user.role}, 同步标志={sync}")
     
-    # 先从Langflow API获取最新的工作流数据
+    # 如果不需要同步，直接从数据库获取
+    if not sync:
+        log.info("不需要同步，直接从数据库获取工作流")
+        return Workflows.get_workflows(user.id, user.role)
+    
+    # 需要同步时，从WorldSeek Agent获取最新数据
     try:
-        log.info("从Langflow获取最新工作流数据")
+        log.info("从WorldSeek Agent获取最新工作流数据")
+        
+        # 获取配置的API密钥
+        langflow_api_key, langflow_base_url = ApiKeys.get_langflow_config()
+        
+        # 如果没有配置API密钥，仍然返回数据库中的工作流
+        if not langflow_api_key:
+            log.warning("未配置WorldSeek Agent API密钥，仅返回数据库中的工作流")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='未配置WorldSeek Agent API密钥，请联系管理员设置'
+            )
+        
+        # 使用配置的base_url，如果没有配置则使用环境变量
+        api_base_url = langflow_base_url or LANGFLOW_API_BASE_URL
+        
         async with aiohttp.ClientSession() as session:
-            url = f"{LANGFLOW_API_BASE_URL}/flows/?remove_example_flows=true&components_only=false&get_all=true&header_flows=false&page=1&size=1000"
+            url = f"{api_base_url}/flows/?remove_example_flows=true&components_only=false&get_all=true&header_flows=false&page=1&size=100"
             headers = {
-                "Authorization": LANGFLOW_TOKEN,
+                "x-api-key": langflow_api_key,
                 "accept": "application/json"
             }
 
-            log.info(f"发送请求到Langflow: URL={url}")
+            log.info(f"发送请求到WorldSeek Agent: URL={url}")
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
-                    log.info(f"成功获取Langflow工作流数据: {type(data)}")
+                    log.info(f"成功获取WorldSeek Agent工作流数据: {type(data)}")
                     
                     # 处理不同的数据结构
                     flows_list = []
@@ -191,14 +213,52 @@ async def get_workflows(
                     
                     # 同步数据库中的工作流数据
                     await sync_workflows_with_database(filtered_flows, user)
+                    
+                    # 返回数据库中的工作流数据
+                    return Workflows.get_workflows(user.id, user.role)
                 else:
                     error_text = await response.text()
-                    log.warning(f"Langflow请求失败，将使用现有数据库数据: 状态码={response.status}, 错误信息={error_text}")
+                    log.error(f"WorldSeek Agent请求失败: 状态码={response.status}, 错误信息={error_text}")
+                    
+                    # 提供用户友好的错误信息
+                    if response.status == 401:
+                        user_error = "未配置WorldSeek Agent API密钥，请联系管理员设置"
+                    elif response.status == 403:
+                        user_error = "访问被拒绝，请检查WorldSeek Agent服务权限配置"
+                    elif response.status == 404:
+                        user_error = "WorldSeek Agent服务接口不存在，请检查服务配置"
+                    elif response.status == 500:
+                        user_error = "WorldSeek Agent服务内部错误，请联系管理员"
+                    elif response.status == 503:
+                        user_error = "WorldSeek Agent服务暂时不可用，请稍后重试"
+                    else:
+                        user_error = f"WorldSeek Agent服务请求失败(状态码: {response.status})"
+                    
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=user_error
+                    )
+    except HTTPException:
+        # 重新抛出HTTP异常
+        raise
     except Exception as e:
-        log.warning(f"从Langflow获取工作流数据失败，将使用现有数据库数据: {str(e)}")
-    
-    # 返回数据库中的工作流数据
-    return Workflows.get_workflows(user.id, user.role)
+        log.error(f"从WorldSeek Agent获取工作流数据失败: {str(e)}")
+        
+        # 提供简洁的错误信息
+        error_str = str(e)
+        if "timeout" in error_str.lower():
+            user_error = "连接WorldSeek Agent服务超时，请检查网络连接"
+        elif "connection" in error_str.lower():
+            user_error = "无法连接到WorldSeek Agent服务，请检查服务状态"
+        elif "ssl" in error_str.lower():
+            user_error = "SSL连接错误，请检查WorldSeek Agent服务配置"
+        else:
+            user_error = "获取工作流数据失败，请联系管理员"
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=user_error
+        )
 
 ############################
 # CreateNewWorkflow
@@ -481,8 +541,22 @@ async def run_workflow(
         )
 
     try:
+        # 获取配置的API密钥
+        langflow_api_key, langflow_base_url = ApiKeys.get_langflow_config()
+        
+        # 如果没有配置API密钥，返回错误
+        if not langflow_api_key:
+            log.error("未配置WorldSeek Agent API密钥")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="未配置WorldSeek Agent API密钥，请联系管理员设置",
+            )
+        
+        # 使用配置的base_url，如果没有配置则使用环境变量
+        api_base_url = langflow_base_url or LANGFLOW_BASE_URL
+        
         # 准备API URL
-        api_url = LANGFLOW_BASE_URL + workflow.api_path
+        api_url = api_base_url + workflow.api_path
         if not api_url:
             log.error(f"API路径未配置: ID={workflow_id}")
             raise HTTPException(
@@ -492,10 +566,8 @@ async def run_workflow(
         
         log.info(f"完整API URL: {api_url}")
         
-        # 获取App Token
-        app_token = workflow.app_token
-        if not app_token and hasattr(workflow, 'params') and workflow.params:
-            app_token = workflow.params.get("app_token")
+        # 使用配置的App Token
+        app_token = langflow_api_key
         
         # 获取参数
         params = form_data.get("params", {})
@@ -521,18 +593,36 @@ async def run_workflow(
             
             # 只有当知识库项目存在时，才添加知识库参数
             if kb_items:
-                dataset_id = kb_items[0]
-                input_value["kb_params"] = {
-                    "datasetId": dataset_id,
-                    "text": latest_message,
-                    "searchMode": kb_settings.get("searchMode", "embedding"),
-                    "limit": kb_settings.get("limit", 10),
-                    "similarity": kb_settings.get("similarity", 0.5),
-                    "usingReRank": kb_settings.get("usingReRank", True),
-                    "datasetSearchUsingExtensionQuery": kb_settings.get("datasetSearchUsingExtensionQuery", False),
-                }
-                input_value["url_value"] = FASTGPT_BASE_URL + "/api/core/dataset/searchTest"
-                log.info("添加知识库参数到请求")
+                # 获取配置的FastGPT API密钥
+                fastgpt_api_key, fastgpt_base_url = ApiKeys.get_fastgpt_config()
+                
+                # 如果没有配置FastGPT API密钥，跳过知识库参数
+                if not fastgpt_api_key:
+                    log.warning("未配置WorldSeek KB API密钥")
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="未配置WorldSeek KB API密钥，请联系管理员设置",
+                    )
+                else:
+                    # 使用配置的base_url，如果没有配置则使用环境变量
+                    fastgpt_api_base_url = fastgpt_base_url or FASTGPT_BASE_URL
+                    
+                    dataset_id = kb_items[0]
+                    input_value["kb_params"] = {
+                        "datasetId": dataset_id,
+                        "text": latest_message,
+                        "searchMode": kb_settings.get("searchMode", "embedding"),
+                        "limit": kb_settings.get("limit", 10),
+                        "similarity": kb_settings.get("similarity", 0.5),
+                        "usingReRank": kb_settings.get("usingReRank", True),
+                        "datasetSearchUsingExtensionQuery": kb_settings.get("datasetSearchUsingExtensionQuery", False),
+                    }
+                    input_value["url_value"] = fastgpt_api_base_url + "/api/core/dataset/searchTest"
+                    input_value["headers_params"] = {
+                        "Authorization": f"Bearer {fastgpt_api_key}",
+                        "Content-Type": "application/json"
+                    }
+                    log.info("添加知识库参数到请求")
             else:
                 log.info("知识库items为空，不添加知识库参数")
         else:
@@ -545,6 +635,8 @@ async def run_workflow(
             "input_type": "chat",
             "output_type": "chat",
         }
+
+        log.info(f"请求数据: {langflow_data}")
         
         # 调用Langflow API
         try:
@@ -595,10 +687,24 @@ async def get_knowledge_bases(user=Depends(get_verified_user)):
     """
     log.info(f"开始获取知识库列表: 用户ID={user.id}, 角色={user.role}")
     try:
+        # 获取配置的FastGPT API密钥
+        fastgpt_api_key, fastgpt_base_url = ApiKeys.get_fastgpt_config()
+        
+        # 如果没有配置API密钥，返回空列表
+        if not fastgpt_api_key:
+            log.warning("未配置WorldSeek KB API密钥")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="未配置WorldSeek KB API密钥，请联系管理员设置",
+            )
+        
+        # 使用配置的base_url，如果没有配置则使用环境变量
+        api_base_url = fastgpt_base_url or FASTGPT_BASE_URL
+        
         async with aiohttp.ClientSession() as session:
-            url = f"{FASTGPT_BASE_URL}/api/core/dataset/list?parentId="
+            url = f"{api_base_url}/api/core/dataset/list?parentId="
             headers = {
-                "Authorization": f"Bearer {FASTGPT_TOKEN}",
+                "Authorization": f"Bearer {fastgpt_api_key}",
                 "Content-Type": "application/json"
             }
             log.info(f"发送请求到FastGPT: URL={url}")

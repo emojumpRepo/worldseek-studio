@@ -1,4 +1,4 @@
-import type { A } from "vitest/dist/reporters-w_64AS5f.js";
+
 
 export type Banner = {
 	id: string;
@@ -47,6 +47,12 @@ export type WorkflowApp = {
     params: Params | null;
 }
 
+export type ApiResponse<T> = {
+    data: T;
+    success: boolean;
+    error?: string;
+}
+
 export type Agent = {
     id: string;
     name: string;
@@ -56,5 +62,5 @@ export type Agent = {
     params: Params | null;
     user?: User;
     workflow_app?: Agent;
-    access_control: any;
+    access_control: Record<string, unknown>;
 };

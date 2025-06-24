@@ -53,17 +53,54 @@
 	let workflowApps: WorkflowApp[] = [];
 	let name = '';
 	let selectedWorkflowApp: WorkflowApp | null = null;
+	let errorMessage = '';
 
 	// 获取所有可选应用
-	const getAllWorkflowApps = async () => {
+	const getAllWorkflowApps = async (sync: boolean = false) => {
 		isLoading = true;
-		getWorkflowApps(localStorage.token).then((res) => {
-			console.log('getWorkflowApps', res);
-			if (res.data) {
+
+		// 如果是同步操作，不清空错误信息，保持当前状态
+		if (!sync) {
+			errorMessage = '';
+		}
+
+		try {
+			const res = await getWorkflowApps(localStorage.token, sync);
+			console.log('getWorkflowApps', res, 'sync:', sync);
+			if (res.success && res.data) {
 				workflowApps = res.data;
+				// 如果是同步操作且成功，清空之前的错误信息
+				if (sync) {
+					errorMessage = '';
+					toast.success('工作流数据同步成功');
+				}
+			} else {
+				const errorMsg = (res as any).error || '获取工作流失败';
+				if (sync) {
+					// 同步失败时只显示Toast，不影响现有列表
+					toast.error(`同步失败: ${errorMsg}`);
+				} else {
+					// 普通获取失败时清空列表并显示错误
+					workflowApps = [];
+					errorMessage = errorMsg;
+					toast.error(errorMsg);
+				}
 			}
-			isLoading = false;
-		});
+		} catch (error) {
+			const errorMsg = '网络连接失败，请检查网络';
+			console.error('getAllWorkflowApps error:', error);
+
+			if (sync) {
+				// 同步失败时只显示Toast，不影响现有列表
+				toast.error(`同步失败: ${errorMsg}`);
+			} else {
+				// 普通获取失败时清空列表并显示错误
+				workflowApps = [];
+				errorMessage = errorMsg;
+				toast.error(errorMsg);
+			}
+		}
+		isLoading = false;
 	};
 
 	onMount(async () => {
@@ -127,43 +164,84 @@
 
 			<!-- 表单部分 - 添加滚动 -->
 			<div class="p-5 flex-1 overflow-y-auto">
-				{#if isLoading}
-					<div class="flex items-center justify-center h-40">
-						<Spinner className="w-10 h-10" />
-					</div>
-				{:else}
-					<div class="flex flex-col gap-6">
-						<!-- 智能体名称 表单项 -->
-						<div class="form-group">
-							<div class="form-header mb-2">
-								<div class="form-title text-sm">
-									{$i18n.t('Model Name')}
-								</div>
+				<div class="flex flex-col gap-6">
+					<!-- 智能体名称 表单项 -->
+					<div class="form-group">
+						<div class="form-header mb-2">
+							<div class="form-title text-sm">
+								{$i18n.t('Model Name')}
 							</div>
-							<input
-								type="text"
-								class="form-input focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow duration-200"
-								bind:value={name}
-								placeholder={$i18n.t('Model Name Placeholder')}
-							/>
 						</div>
-
+						<input
+							type="text"
+							class="form-input focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow duration-200"
+							bind:value={name}
+							placeholder={$i18n.t('Model Name Placeholder')}
+						/>
+					</div>
+					{#if isLoading}
+						<div class="flex items-center justify-center h-40">
+							<Spinner className="w-10 h-10" />
+						</div>
+					{:else}
 						<!-- 可选应用 表单项 -->
 						<div class="form-group flex-1">
-							<div class="form-title text-sm mb-2">
-								{$i18n.t('Model APP Choice')}
+							<div class="flex items-center justify-between mb-2">
+								<div class="form-title text-sm">
+									{$i18n.t('Model APP Choice')}
+								</div>
+								<button
+									class="text-xs px-2 py-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors flex items-center gap-1"
+									on:click={() => getAllWorkflowApps(true)}
+									disabled={isLoading}
+								>
+									<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+										></path>
+									</svg>
+									从WorldSeek Agent同步
+								</button>
 							</div>
 							{#if workflowApps.length === 0}
 								<div class="flex flex-col items-center justify-center h-32 gap-3">
 									<div class="text-gray-400">
-										<svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-10 w-10"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="1.5"
+												d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+											/>
 										</svg>
 									</div>
-									<p class="text-gray-500 text-base font-medium">暂无应用</p>
+									{#if errorMessage}
+										<p class="text-red-500 text-base font-medium">{errorMessage}</p>
+										<div class="flex gap-2">
+											<button
+												class="px-3 py-1.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+												on:click={() => getAllWorkflowApps(false)}
+											>
+												重试
+											</button>
+										</div>
+									{:else}
+										<p class="text-gray-500 text-base font-medium">暂无应用</p>
+									{/if}
 								</div>
 							{:else}
-								<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 pb-1">
+								<div
+									class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 pb-1"
+								>
 									{#each workflowApps as workflowApp}
 										<div
 											class="app-card {selectedWorkflowApp?.id === workflowApp.id
@@ -186,15 +264,15 @@
 								</div>
 							{/if}
 						</div>
-					</div>
-				{/if}
+					{/if}
+				</div>
 			</div>
 
 			<div class="p-4 border-t border-gray-200 flex justify-end items-center gap-3">
 				<button class="btn-cancel" on:click={closeModal}>
 					{$i18n.t('Cancel')}
 				</button>
-				<button class="btn-primary" on:click={confirmHandler} disabled={!selectedWorkflowApp}>
+				<button class="btn-create" on:click={confirmHandler} disabled={!selectedWorkflowApp || isLoading}>
 					{$i18n.t('Create')}
 				</button>
 			</div>
@@ -351,25 +429,19 @@
 		background-color: #f3f4f6;
 	}
 
-	.btn-primary {
+	.btn-create {
 		border-radius: 0.5rem;
 		padding: 0.5rem 1.25rem;
 		font-size: 0.875rem;
 		font-weight: 500;
-		background-color: #2563eb;
 		color: white;
+		background-color: #0a0a0a;
 		transition: all 0.2s ease;
-		border: 1px solid #2563eb;
 	}
 
-	.btn-primary:hover {
-		background-color: #1d4ed8;
-		border-color: #1d4ed8;
-	}
-
-	.btn-primary:disabled {
-		background-color: #93c5fd;
-		border-color: #93c5fd;
+	.btn-create:disabled {
+		background-color: #6b6b6be8;
+		border-color: #6b6b6be8;
 		cursor: not-allowed;
 	}
 

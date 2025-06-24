@@ -10,11 +10,9 @@
 		updateLdapConfig,
 		updateLdapServer
 	} from '$lib/apis/auths';
-	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import { WS_BUILD_HASH, WS_VERSION } from '$lib/constants';
-	import { config, showChangelog } from '$lib/stores';
+	import ApiKeysConfig from './ApiKeysConfig.svelte';
+	import { WS_VERSION } from '$lib/constants';
 	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -479,6 +477,9 @@
 						</div>
 					</div> -->
 				</div>
+
+				<!-- API密钥配置 -->
+				<ApiKeysConfig />
 
 				<!-- <div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Features')}</div>
