@@ -37,10 +37,10 @@
 			knowledge: {
 				settings: {
 					searchMode: '',
-					useLimit: 0,
-					relevance: 0,
-					contentReordering: false,
-					optimization: false
+					limit: 0,
+					similarity: 0,
+					usingReRank: false,
+					datasetSearchUsingExtensionQuery: false,
 				},
 				items: []
 			},
@@ -57,9 +57,27 @@
 	let group_ids: string[] = [];
 
 	$: if (models) {
-		filteredModels = models.filter(
+		// 先根据搜索条件过滤
+		const searchFiltered = models.filter(
 			(m) => searchValue === '' || m.name.toLowerCase().includes(searchValue.toLowerCase())
 		);
+		
+		// 分离有效和失效的智能体
+		const validAgents = searchFiltered.filter(m => m.workflow_app !== null);
+		const invalidAgents = searchFiltered.filter(m => m.workflow_app === null);
+		
+		// 分别按更新时间降序排序
+		const sortByUpdateTime = (a: any, b: any) => {
+			const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+			const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+			return bTime - aTime; // 降序排序
+		};
+		
+		validAgents.sort(sortByUpdateTime);
+		invalidAgents.sort(sortByUpdateTime);
+		
+		// 合并结果：有效的在前，失效的在后
+		filteredModels = [...validAgents, ...invalidAgents];
 	}
 
 	let searchValue = '';
@@ -120,6 +138,7 @@
 
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
+		console.log('models', models);
 		let groups = await getGroups(localStorage.token);
 		group_ids = groups.map((group: any) => group.id);
 
@@ -306,7 +325,14 @@
 		{:else}
 			<div class="gap-4 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
 				{#each filteredModels as model}
-					<div class="agent-card">
+					<div class="agent-card {model.workflow_app === null ? 'disabled' : ''}">
+						<!-- 失效标签 -->
+						{#if model.workflow_app === null}
+							<div class="expired-tag">
+								已失效
+							</div>
+						{/if}
+						
 						<div class="agent-header">
 							<div class="agent-avatar">
 								<span class="agent-initial">{model.name.charAt(0)}</span>
@@ -354,9 +380,12 @@
 						<div class="agent-footer">
 							<button
 								class="agent-action-btn"
+								disabled={model.workflow_app === null}
 								on:click={() => {
-									showModelSettingDialog = true;
-									selectedAgent = model;
+									if (model.workflow_app !== null) {
+										showModelSettingDialog = true;
+										selectedAgent = model;
+									}
 								}}
 							>
 								<svg
@@ -443,11 +472,44 @@
 		flex-direction: column;
 		height: 100%;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+		position: relative;
 	}
 
 	.agent-card:hover {
 		border-color: #3b82f6;
 		box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+	}
+
+	/* 禁用状态样式 */
+	.agent-card.disabled {
+		opacity: 0.6;
+		background-color: #f8f9fa;
+		border-color: #dee2e6;
+		pointer-events: none;
+		user-select: none;
+	}
+
+	.agent-card.disabled:hover {
+		border-color: #dee2e6;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+	}
+
+	/* 失效标签样式 */
+	.expired-tag {
+		position: absolute;
+		top: 12px;
+		right: 12px;
+		background-color: #fef2f2;
+		color: #dc2626;
+		border: 1px solid #fecaca;
+		border-radius: 6px;
+		padding: 4px 8px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		z-index: 1;
 	}
 
 	.agent-header {
@@ -533,9 +595,11 @@
 		line-height: 1.5;
 		margin-bottom: 16px;
 		display: -webkit-box;
-		-webkit-line-clamp: 3;
+		-webkit-line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
+		min-height: 2.7rem; /* 固定高度为两行：1.5行高 × 2行 × 0.9rem字体大小 */
+		height: 2.7rem;
 	}
 
 	.agent-footer {
@@ -566,6 +630,20 @@
 		color: #1f2937;
 	}
 
+	.agent-action-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+		background-color: #f9fafb;
+		border-color: #e5e7eb;
+		color: #9ca3af;
+	}
+
+	.agent-action-btn:disabled:hover {
+		background-color: #f9fafb;
+		border-color: #e5e7eb;
+		color: #9ca3af;
+	}
+
 	@media (prefers-color-scheme: dark) {
 		.agent-card {
 			background-color: #1f2937;
@@ -575,6 +653,17 @@
 		.agent-card:hover {
 			border-color: #3b82f6;
 			box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+		}
+
+		.agent-card.disabled {
+			background-color: #1a1f2a;
+			border-color: #2d3748;
+		}
+
+		.expired-tag {
+			background-color: #3f2937;
+			color: #fca5a5;
+			border-color: #702459;
 		}
 
 		.agent-avatar {
@@ -612,6 +701,18 @@
 			background-color: #4b5563;
 			border-color: #6b7280;
 			color: #f9fafb;
+		}
+
+		.agent-action-btn:disabled {
+			background-color: #374151;
+			border-color: #4b5563;
+			color: #6b7280;
+		}
+
+		.agent-action-btn:disabled:hover {
+			background-color: #374151;
+			border-color: #4b5563;
+			color: #6b7280;
 		}
 	}
 </style>
