@@ -356,10 +356,6 @@
 								<div class="form-title text-gray-800 dark:text-gray-200">
 									{$i18n.t('Models Model Choice')}
 								</div>
-								<button class="icon-button">
-									<Cog6 />
-									<span class="text-xs">{$i18n.t('Settings')}</span>
-								</button>
 							</div>
 							<hr class="form-divider mb-3" />
 
@@ -389,16 +385,6 @@
 							<div class="form-panel-header mb-4">
 								<div class="form-title text-gray-800 dark:text-gray-200">
 									{$i18n.t('Models Knowledge Base')}
-								</div>
-								<div class="flex items-center gap-3">
-									<button class="icon-button">
-										<Cog6 />
-										<span class="text-xs">{$i18n.t('Settings')}</span>
-									</button>
-									<button class="icon-button accent-button">
-										<CirclePlus />
-										<span class="text-xs">{$i18n.t('Add')}</span>
-									</button>
 								</div>
 							</div>
 							<div class="grid grid-cols-5 gap-6 text-xs mb-5 p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800">
