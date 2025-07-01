@@ -26,8 +26,9 @@
 	};
 
 	$: if (selectedModels.length > 0 && $models.length > 0) {
+		console.log('$models', $models);
 		selectedModels = selectedModels.map((model) =>
-			$models.map((m) => m.id).includes(model) ? model : ''
+			$models.filter((m) => m.workflow_app !== null).map((m) => m.id).includes(model) ? model : ''
 		);
 	}
 </script>
@@ -40,7 +41,7 @@
 					<Selector
 						id={`${selectedModelIdx}`}
 						placeholder={$i18n.t('Select a model')}
-						items={$models.map((model) => ({
+						items={$models.filter((m) => m.workflow_app !== null).map((model) => ({
 							value: model.id,
 							label: model.name,
 							model: model

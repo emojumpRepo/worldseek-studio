@@ -107,12 +107,12 @@
 </script>
 
 <form
-	class="flex flex-col h-full justify-between space-y-3 text-sm"
+	class="flex flex-col justify-between space-y-3 text-sm"
 	on:submit|preventDefault={async () => {
 		updateHandler();
 	}}
 >
-	<div class="mt-0.5 space-y-3 overflow-y-scroll scrollbar-hidden h-full">
+	<div class="mt-0.5 space-y-3 overflow-y-scroll scrollbar-hidden">
 		{#if adminConfig !== null}
 			<div class="">
 				<!-- <div class="mb-3.5">
@@ -478,9 +478,6 @@
 					</div> -->
 				</div>
 
-				<!-- API密钥配置 -->
-				<ApiKeysConfig />
-
 				<!-- <div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Features')}</div>
 
@@ -556,12 +553,15 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="flex justify-end text-sm font-medium">
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="header-btn btn-primary no-shadow"
 			type="submit"
 		>
 			{$i18n.t('Save')}
 		</button>
 	</div>
+
+	<!-- API密钥配置 -->
+	<ApiKeysConfig />
 </form>

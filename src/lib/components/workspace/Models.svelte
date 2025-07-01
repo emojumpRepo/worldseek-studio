@@ -1,9 +1,10 @@
 <script lang="ts">
 	import ModelSettingDialog from './Models/ModelSettingDialog.svelte';
 	import ModelCreateDialog from './Models/ModelCreateDialog.svelte';
+	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import { toast } from 'svelte-sonner';
 	import type { Agent } from '$lib/types';
-	import { onMount, getContext, tick } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
 	import { WEBUI_NAME, config, mobile, models as _models, settings, user } from '$lib/stores';
@@ -30,22 +31,7 @@
 		description: '',
 		access_control: {},
 		base_app_id: '',
-		user_id: '',
-		params: {
-			model: '',
-			prompt: '',
-			knowledge: {
-				settings: {
-					searchMode: '',
-					limit: 0,
-					similarity: 0,
-					usingReRank: false,
-					datasetSearchUsingExtensionQuery: false,
-				},
-				items: []
-			},
-			tools: []
-		}
+		user_id: ''
 	};
 
 	let models: Agent[] = [];
@@ -61,21 +47,21 @@
 		const searchFiltered = models.filter(
 			(m) => searchValue === '' || m.name.toLowerCase().includes(searchValue.toLowerCase())
 		);
-		
+
 		// 分离有效和失效的智能体
-		const validAgents = searchFiltered.filter(m => m.workflow_app !== null);
-		const invalidAgents = searchFiltered.filter(m => m.workflow_app === null);
-		
+		const validAgents = searchFiltered.filter((m) => m.workflow_app !== null);
+		const invalidAgents = searchFiltered.filter((m) => m.workflow_app === null);
+
 		// 分别按更新时间降序排序
 		const sortByUpdateTime = (a: any, b: any) => {
 			const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
 			const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
 			return bTime - aTime; // 降序排序
 		};
-		
+
 		validAgents.sort(sortByUpdateTime);
 		invalidAgents.sort(sortByUpdateTime);
-		
+
 		// 合并结果：有效的在前，失效的在后
 		filteredModels = [...validAgents, ...invalidAgents];
 	}
@@ -189,6 +175,29 @@
 		console.log('打开新建智能体弹窗');
 		showModelCreateDialog = true;
 	};
+
+	const updateWorkflowApps = async () => {
+		models = await getWorkspaceModels(localStorage.token);
+	};
+
+	let deleteConfirmDialogShow = false;
+	// 删除失效智能体的处理函数
+	const deleteInvalidAgent = async (agent: Agent) => {
+		try {
+			const res = await deleteModelById(localStorage.token, agent.id);
+			if (res) {
+				toast.success(`智能体"${agent.name}"删除成功`);
+				// 重新加载智能体列表
+				models = await getWorkspaceModels(localStorage.token);
+				await _models.set(await getModels(localStorage.token));
+			} else {
+				toast.error(`删除智能体"${agent.name}"失败`);
+			}
+		} catch (error) {
+			console.error('删除智能体失败:', error);
+			toast.error(`删除智能体"${agent.name}"失败`);
+		}
+	};
 </script>
 
 <svelte:head>
@@ -205,7 +214,23 @@
 		on:delete={deleteModelHandler}
 	/>
 
-	<ModelCreateDialog bind:show={showModelCreateDialog} on:confirm={createModelHandler} />
+	<DeleteConfirmDialog
+		bind:show={deleteConfirmDialogShow}
+		title="删除智能体"
+		message="确定删除该智能体吗？"
+		on:cancel={() => {
+			deleteConfirmDialogShow = false;
+		}}
+		on:confirm={() => {
+			deleteInvalidAgent(selectedAgent);
+		}}
+	/>
+
+	<ModelCreateDialog
+		bind:show={showModelCreateDialog}
+		on:confirm={createModelHandler}
+		on:updateWorkflowApps={updateWorkflowApps}
+	/>
 
 	<div class="my-4 mb-5">
 		<div class="flex justify-between items-center mb-6">
@@ -241,12 +266,9 @@
 						class="pl-10 pr-4 py-2 w-64 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
 					/>
 				</div>
-				
+
 				<!-- 智能体开发按钮 -->
-				<button
-					class="header-btn btn-secondary"
-					on:click={navigateToDevelop}
-				>
+				<button class="header-btn btn-secondary" on:click={navigateToDevelop}>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						class="h-4 w-4"
@@ -278,12 +300,9 @@
 						/>
 					</svg>
 				</button>
-				
+
 				<!-- 新建智能体按钮 -->
-				<button
-					class="header-btn btn-primary"
-					on:click={openCreateDialog}
-				>
+				<button class="header-btn btn-primary" on:click={openCreateDialog}>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						class="h-4 w-4"
@@ -328,11 +347,9 @@
 					<div class="agent-card {model.workflow_app === null ? 'disabled' : ''}">
 						<!-- 失效标签 -->
 						{#if model.workflow_app === null}
-							<div class="expired-tag">
-								已失效
-							</div>
+							<div class="expired-tag">已失效</div>
 						{/if}
-						
+
 						<div class="agent-header">
 							<div class="agent-avatar">
 								<span class="agent-initial">{model.name.charAt(0)}</span>
@@ -378,38 +395,67 @@
 						</div>
 
 						<div class="agent-footer">
-							<button
-								class="agent-action-btn"
-								disabled={model.workflow_app === null}
-								on:click={() => {
-									if (model.workflow_app !== null) {
-										showModelSettingDialog = true;
-										selectedAgent = model;
-									}
-								}}
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									class="h-5 w-5"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
+							<div class="flex gap-2">
+								<button
+									class="agent-action-btn"
+									disabled={model.workflow_app === null}
+									on:click={() => {
+										if (model.workflow_app !== null) {
+											showModelSettingDialog = true;
+											selectedAgent = model;
+										}
+									}}
 								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-									/>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-									/>
-								</svg>
-								设置
-							</button>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-5 w-5"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+										/>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+										/>
+									</svg>
+									设置
+								</button>
+
+								{#if model.workflow_app === null}
+									<button
+										class="agent-remove-btn"
+										on:click={() => {
+											deleteConfirmDialogShow = true;
+											selectedAgent = model;
+										}}
+										title="删除失效的智能体"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-5 w-5"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1 1v3M4 7h16"
+											/>
+										</svg>
+										移除
+									</button>
+								{/if}
+							</div>
 						</div>
 					</div>
 				{/each}
@@ -456,7 +502,7 @@
 			padding: 8px 12px;
 			font-size: 0.8rem;
 		}
-		
+
 		.header-btn span {
 			display: none;
 		}
@@ -480,13 +526,24 @@
 		box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 	}
 
-	/* 禁用状态样式 */
+	/* 禁用状态样式 - 不使用整体透明度，而是用伪元素遮罩 */
 	.agent-card.disabled {
-		opacity: 0.6;
 		background-color: #f8f9fa;
 		border-color: #dee2e6;
-		pointer-events: none;
 		user-select: none;
+	}
+
+	/* 失效卡片内容区域禁用点击，但按钮区域可以点击 */
+	.agent-card.disabled .agent-header,
+	.agent-card.disabled .agent-description {
+		pointer-events: none;
+	}
+
+	/* 移除按钮在失效卡片中仍然可以点击且在遮罩层之上 */
+	.agent-card.disabled .agent-remove-btn {
+		pointer-events: auto !important;
+		position: relative;
+		z-index: 20; /* 确保在遮罩层(z-index: 2)之上 */
 	}
 
 	.agent-card.disabled:hover {
@@ -608,6 +665,8 @@
 		margin-top: auto;
 		padding-top: 12px;
 		border-top: 1px solid #f3f4f6;
+		position: relative;
+		z-index: 10; /* 确保footer区域在遮罩层之上 */
 	}
 
 	.agent-action-btn {
@@ -644,6 +703,34 @@
 		color: #9ca3af;
 	}
 
+	.agent-remove-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 12px;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #ff4848;
+		border-radius: 8px;
+		background-color: #fff;
+		border: 1px solid #ff4848;
+		transition: all 0.15s ease;
+		cursor: pointer;
+		pointer-events: auto !important; /* 确保按钮始终可点击 */
+		position: relative;
+		z-index: 10; /* 提升层级，确保在失效遮罩之上 */
+		box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+		opacity: 1 !important; /* 强制不透明，不受父元素影响 */
+	}
+
+	.agent-remove-btn:hover {
+		background-color: #b91c1c;
+		border-color: #b91c1c;
+		color: #ffffff;
+		box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
+		transform: translateY(-1px);
+	}
+
 	@media (prefers-color-scheme: dark) {
 		.agent-card {
 			background-color: #1f2937;
@@ -658,6 +745,23 @@
 		.agent-card.disabled {
 			background-color: #1a1f2a;
 			border-color: #2d3748;
+		}
+
+		/* 暗色模式下的失效遮罩 */
+		:global(.dark) .agent-card.disabled::before {
+			background-color: rgba(0, 0, 0, 0.6);
+		}
+
+		/* 暗色模式下失效卡片的点击控制 */
+		:global(.dark) .agent-card.disabled .agent-header,
+		:global(.dark) .agent-card.disabled .agent-description {
+			pointer-events: none;
+		}
+
+		:global(.dark) .agent-card.disabled .agent-remove-btn {
+			pointer-events: auto !important;
+			position: relative;
+			z-index: 20; /* 确保在遮罩层之上 */
 		}
 
 		.expired-tag {
@@ -713,6 +817,24 @@
 			background-color: #374151;
 			border-color: #4b5563;
 			color: #6b7280;
+		}
+
+		.agent-remove-btn {
+			background-color: #dc2626;
+			border-color: #dc2626;
+			color: #ffffff;
+			position: relative;
+			z-index: 10;
+			opacity: 1 !important;
+			box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+		}
+
+		.agent-remove-btn:hover {
+			background-color: #b91c1c;
+			border-color: #b91c1c;
+			color: #ffffff;
+			box-shadow: 0 4px 8px rgba(220, 38, 38, 0.4);
+			transform: translateY(-1px);
 		}
 	}
 </style>

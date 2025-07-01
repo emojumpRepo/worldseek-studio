@@ -305,11 +305,6 @@ async def create_new_workflow(
             detail=ERROR_MESSAGES.WORKFLOW_ID_TAKEN,
         )
 
-    # 创建新工作流
-    # 将用户信息存储在params中
-    if form_data.params is None:
-        form_data.params = {}
-    form_data.params["user_id"] = user.id
     workflow = Workflows.insert_new_workflow(form_data)
     if workflow:
         log.info(f"工作流创建成功: ID={workflow.id}")
@@ -556,7 +551,7 @@ async def run_workflow(
         api_base_url = langflow_base_url or LANGFLOW_BASE_URL
         
         # 准备API URL
-        api_url = api_base_url + workflow.api_path
+        api_url = api_base_url + "/run/" + workflow.api_path
         if not api_url:
             log.error(f"API路径未配置: ID={workflow_id}")
             raise HTTPException(
@@ -569,69 +564,9 @@ async def run_workflow(
         # 使用配置的App Token
         app_token = langflow_api_key
         
-        # 获取参数
-        params = form_data.get("params", {})
-        stream = params.get("stream", True)
-        timeout = params.get("timeout", REQUEST_TIMEOUT)
-
-        # 合并智能体与工作流应用参数
-        agent_params = agent.params or {}
-        workflow_params = workflow.params or {}
-        merged_params = {**workflow_params, **agent_params}
-        log.info(f"合并后的参数: {merged_params}")
-        
-        # 基本的输入值，不包含知识库参数
-        input_value = {
-            "user_input": latest_message,
-        }
-        
-        # 检查是否有知识库参数
-        knowledge_params = merged_params.get("knowledge", {})
-        if knowledge_params:
-            kb_settings = knowledge_params.get("settings", {})
-            kb_items = knowledge_params.get("items", [])
-            
-            # 只有当知识库项目存在时，才添加知识库参数
-            if kb_items:
-                # 获取配置的FastGPT API密钥
-                fastgpt_api_key, fastgpt_base_url = ApiKeys.get_fastgpt_config()
-                
-                # 如果没有配置FastGPT API密钥，跳过知识库参数
-                if not fastgpt_api_key:
-                    log.warning("未配置WorldSeek KB API密钥")
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="未配置WorldSeek KB API密钥，请联系管理员设置",
-                    )
-                else:
-                    # 使用配置的base_url，如果没有配置则使用环境变量
-                    fastgpt_api_base_url = fastgpt_base_url or FASTGPT_BASE_URL
-                    
-                    dataset_id = kb_items[0]
-                    input_value["kb_params"] = {
-                        "datasetId": dataset_id,
-                        "text": latest_message,
-                        "searchMode": kb_settings.get("searchMode", "embedding"),
-                        "limit": kb_settings.get("limit", 10),
-                        "similarity": kb_settings.get("similarity", 0.5),
-                        "usingReRank": kb_settings.get("usingReRank", True),
-                        "datasetSearchUsingExtensionQuery": kb_settings.get("datasetSearchUsingExtensionQuery", False),
-                    }
-                    input_value["url_value"] = fastgpt_api_base_url + "/api/core/dataset/searchTest"
-                    input_value["headers_params"] = {
-                        "Authorization": f"Bearer {fastgpt_api_key}",
-                        "Content-Type": "application/json"
-                    }
-                    log.info("添加知识库参数到请求")
-            else:
-                log.info("知识库items为空，不添加知识库参数")
-        else:
-            log.info("未找到知识库参数，不添加知识库参数")
-        
         # 准备请求数据
         langflow_data = {
-            "input_value": json.dumps(input_value),
-            # "input_value": latest_message,
+            "input_value": latest_message,
             "input_type": "chat",
             "output_type": "chat",
         }
@@ -641,9 +576,8 @@ async def run_workflow(
         # 调用Langflow API
         try:
             api_call_start = time.time()
-            log.info(f"调用Langflow API: URL={api_url}, 流式={stream}, 超时={timeout}秒")
             
-            result = await call_langflow_api("", api_url, app_token, langflow_data, stream=stream, timeout=timeout)
+            result = await call_langflow_api("", api_url, app_token, langflow_data, stream=True, timeout=REQUEST_TIMEOUT)
             
             api_call_duration = time.time() - api_call_start
             log.info(f"API调用成功: 耗时={api_call_duration:.2f}秒")
@@ -668,63 +602,3 @@ async def run_workflow(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Workflow processing error: {str(e)}",
         )
-
-
-############################
-# GetKnowledgeBases
-############################
-
-@router.get("/knowledge_bases")
-async def get_knowledge_bases(user=Depends(get_verified_user)):
-    """
-    获取知识库列表
-    
-    Args:
-        user: 当前用户
-        
-    Returns:
-        知识库列表
-    """
-    log.info(f"开始获取知识库列表: 用户ID={user.id}, 角色={user.role}")
-    try:
-        # 获取配置的FastGPT API密钥
-        fastgpt_api_key, fastgpt_base_url = ApiKeys.get_fastgpt_config()
-        
-        # 如果没有配置API密钥，返回空列表
-        if not fastgpt_api_key:
-            log.warning("未配置WorldSeek KB API密钥")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="未配置WorldSeek KB API密钥，请联系管理员设置",
-            )
-        
-        # 使用配置的base_url，如果没有配置则使用环境变量
-        api_base_url = fastgpt_base_url or FASTGPT_BASE_URL
-        
-        async with aiohttp.ClientSession() as session:
-            url = f"{api_base_url}/api/core/dataset/list?parentId="
-            headers = {
-                "Authorization": f"Bearer {fastgpt_api_key}",
-                "Content-Type": "application/json"
-            }
-            log.info(f"发送请求到FastGPT: URL={url}")
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    log.info(f"成功获取知识库列表: {data}")
-                    log.info(f"成功获取知识库列表: {type(data)}")
-                    return JSONResponse(content={"data": data.get("data", [])})
-                else:
-                    error_text = await response.text()
-                    log.error(f"FastGPT请求失败: 状态码={response.status}, 错误信息={error_text}")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="获取知识库列表失败"
-                    )
-    except Exception as e:
-        log.error(f"获取知识库列表时发生错误: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取知识库列表失败: {str(e)}"
-        )
-

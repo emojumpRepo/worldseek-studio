@@ -26,13 +26,6 @@ log.setLevel(SRC_LOG_LEVELS["AGENTS"])
 # Agents DB Schema
 ####################
 
-
-# AgentParams is a model for the data stored in the params field of the Agent table
-class AgentParams(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    pass
-
-
 class Agent(Base):
     __tablename__ = "agent"
 
@@ -56,11 +49,6 @@ class Agent(Base):
     description = Column(Text)
     """
         The description of the agent.
-    """
-
-    params = Column(JSONField)
-    """
-        Holds a JSON encoded blob of parameters, see `ModelParams`.
     """
 
     access_control = Column(JSON, nullable=True)  # Controls data access levels.
@@ -93,7 +81,6 @@ class AgentModel(BaseModel):
     
     name: str
     description: str
-    params: Optional[dict] = None
     access_control: Optional[dict] = None
 
     is_deleted: bool
@@ -126,7 +113,6 @@ class AgentForm(BaseModel):
     description: str
     access_control: Optional[dict] = None
     is_deleted: bool = False
-    params: Optional[dict] = None
     user_id: Optional[str] = None
 
 class ModelsTable:

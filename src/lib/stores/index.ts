@@ -1,7 +1,7 @@
 import { APP_NAME } from '$lib/constants';
 import { type Writable, writable } from 'svelte/store';
 import type { ModelConfig } from '$lib/apis';
-import type { Banner } from '$lib/types';
+import type { Banner, Agent } from '$lib/types';
 import type { Socket } from 'socket.io-client';
 
 import emojiShortCodes from '$lib/emoji-shortcodes.json';
@@ -51,7 +51,7 @@ export const chats = writable(null);
 export const pinnedChats = writable([]);
 export const tags = writable([]);
 
-export const models: Writable<Model[]> = writable([]);
+export const models: Writable<Agent[]> = writable([]);
 
 export const prompts: Writable<null | Prompt[]> = writable(null);
 export const knowledge: Writable<null | Document[]> = writable(null);

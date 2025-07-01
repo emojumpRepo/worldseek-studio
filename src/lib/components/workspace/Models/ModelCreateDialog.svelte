@@ -74,6 +74,7 @@
 					errorMessage = '';
 					toast.success('工作流数据同步成功');
 				}
+				dispatch('updateWorkflowApps');
 			} else {
 				const errorMsg = (res as any).error || '获取工作流失败';
 				if (sync) {

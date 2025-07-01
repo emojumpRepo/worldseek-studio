@@ -64,8 +64,7 @@ async def update_api_keys_config(
     
     try:
         # 验证输入数据
-        if (not form_data.langflow_api_key and not form_data.fastgpt_api_key and 
-            not form_data.langflow_base_url and not form_data.fastgpt_base_url):
+        if (not form_data.langflow_api_key and not form_data.langflow_base_url):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="至少需要提供一项API配置"

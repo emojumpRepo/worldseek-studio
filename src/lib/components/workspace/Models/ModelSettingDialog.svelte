@@ -1,21 +1,10 @@
 <script lang="ts">
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import { toast } from 'svelte-sonner';
 	import { Label, RadioGroup } from 'bits-ui';
-	import Cog6 from '$lib/components/icons/Cog6.svelte';
-	import CirclePlus from '$lib/components/icons/CirclePlus.svelte';
 	import Close from '$lib/components/icons/Close.svelte';
-	import Switch from '$lib/components/common/Switch.svelte';
-	import DropdownSelect from '$lib/components/common/DropdownSelect.svelte';
     import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import type { Agent } from '$lib/types';
-	import { getKnowledgeBases } from '$lib/apis/models';
-
-	interface KnowledgeBase {
-		_id: string;
-		name: string;
-	}
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -27,55 +16,8 @@
 		description: '',
 		base_app_id: '',
 		user_id: '',
-		params: {
-			model: '',
-			prompt: '',
-			knowledge: {
-				settings: {
-					searchMode: 'vector',
-					limit: 10,
-					similarity: 0.5,
-					usingReRank: false,
-					datasetSearchUsingExtensionQuery: false
-				},
-				items: []
-			},
-			tools: []
-		},
 		access_control: {}
 	};
-
-	// 确保agent的params属性始终存在且完整
-	$: {
-		const defaultParams = {
-			model: '',
-			prompt: '',
-			knowledge: {
-				settings: {
-					searchMode: 'vector',
-					limit: 10,
-					similarity: 0.5,
-					usingReRank: false,
-					datasetSearchUsingExtensionQuery: false
-				},
-				items: []
-			},
-			tools: []
-		};
-
-		if (!agent.params) {
-			agent.params = {
-				...defaultParams,
-				...(agent.workflow_app?.params || {})
-			};
-		} else {
-			agent.params = {
-				...defaultParams,
-				...(agent.workflow_app?.params || {}),
-				...agent.params
-			};
-		}
-	}
 	
 	// 初始化描述信息（首次显示时）
 	let isFirstShow = true;
@@ -98,47 +40,6 @@
 			agent.access_control = {};
 		}
 	}
-
-	// 知识库列表
-	let knowledgeBases: KnowledgeBase[] = [];
-	// 模型列表
-	const modelList = [
-		{
-			label: 'GPT-3.5-turbo',
-			value: 'gpt-3.5-turbo'
-		},
-		{
-			label: 'GPT-4',
-			value: 'gpt-4'
-		},
-		{
-			label: 'GPT-4-turbo',
-			value: 'gpt-4-turbo'
-		},
-		{
-			label: 'GPT-4-turbo-preview',
-			value: 'gpt-4-turbo-preview'
-		},
-		{
-			label: 'GPT-4-turbo-preview-2',
-			value: 'gpt-4-turbo-preview-2'
-		}
-	];
-	// 搜索模式列表
-	const searchModeList = [
-		{
-			label: '嵌入',
-			value: 'embedding '
-		},
-		{
-			label: '全文本',
-			value: 'fullTextRecall'
-		},
-		{
-			label: '混合',
-			value: 'mixedRecall'
-		}
-	];
 
 	let modalElement: HTMLElement | null = null;
 	let mounted = false;
@@ -168,42 +69,11 @@
         if(!agent.description) {
             agent.description = agent.workflow_app?.description || '';
         }
-		console.log('agent.params?.knowledge.items', agent.params?.knowledge.items);
-		if(!agent.params?.knowledge.items) {
-			if (!agent.params) agent.params = {};
-			if (!agent.params.knowledge) agent.params.knowledge = {};
-			agent.params.knowledge.items = [];
-		}
         dispatch('confirm', agent);
 	};
 
-	// 删除知识库
-	function removeKnowledgeItem(index: number) {
-		if (agent.params) {
-			agent.params.knowledge.items = agent.params.knowledge.items.filter((_, i) => i !== index);
-		}
-	}
-
-    // 删除工具
-    function removeTool(index: number) {
-        if (agent.params) {
-            agent.params.tools = agent.params.tools.filter((_, i) => i !== index);
-        }
-    }
-
-	// 获取知识库列表
-	function getKnowledgeBasesList() {
-		getKnowledgeBases(localStorage.token).then((res) => {
-			knowledgeBases = res.data;
-		}).catch((err) => {
-			toast.error('获取知识库列表失败');
-			console.error('getKnowledgeBasesList error:', err);
-		});
-	}
-
 	onMount(() => {
 		mounted = true;
-		getKnowledgeBasesList();
 	});
 
 	$: if (mounted) {
@@ -217,18 +87,6 @@
 			document.body.removeChild(modalElement);
 
 			document.body.style.overflow = 'unset';
-		}
-	}
-
-	// 切换知识库选中状态
-	function toggleKnowledgeBase(kbId: string) {
-		const index = agent.params.knowledge.items.indexOf(kbId);
-		if (index === -1) {
-			// 如果未选中，则添加到选中列表
-			agent.params.knowledge.items = [...agent.params.knowledge.items, kbId];
-		} else {
-			// 如果已选中，则从选中列表中移除
-			agent.params.knowledge.items = agent.params.knowledge.items.filter(id => id !== kbId);
 		}
 	}
 </script>
@@ -328,7 +186,7 @@
 								<RadioGroup.Item
 									id="private"
 									value="private"
-									class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-indigo-400 dark:hover:border-indigo-500 data-[state=checked]:border-4 data-[state=checked]:border-indigo-500 size-5 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
+									class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 data-[state=checked]:border-4 data-[state=checked]:border-black size-5 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
 								/>
 								<Label.Root for="private" class="pl-3 text-sm cursor-pointer"
 									>{$i18n.t('Models Access Private')}</Label.Root
@@ -338,165 +196,11 @@
 								<RadioGroup.Item
 									id="public"
 									value="public"
-									class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-indigo-400 dark:hover:border-indigo-500 data-[state=checked]:border-4 data-[state=checked]:border-indigo-500 size-5 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
+									class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 data-[state=checked]:border-4 data-[state=checked]:border-black size-5 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
 								/>
 								<Label.Root for="public" class="pl-3 text-sm cursor-pointer">{$i18n.t('Models Access Public')}</Label.Root>
 							</div>
 						</RadioGroup.Root>
-					</div>
-
-					<!-- 智能体入参 表单项 -->
-					<div class="flex flex-col gap-4">
-						<div class="form-title text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-800 pb-2">
-							{$i18n.t('Models Params')}
-						</div>
-						<!-- 模型选择 -->
-						<div class="form-panel">
-							<div class="form-panel-header mb-3">
-								<div class="form-title text-gray-800 dark:text-gray-200">
-									{$i18n.t('Models Model Choice')}
-								</div>
-							</div>
-							<hr class="form-divider mb-3" />
-
-							<DropdownSelect
-								bind:value={agent.params.model}
-								options={modelList}
-								placeholder="请选择模型"
-							/>
-						</div>
-						<!-- 提示词 -->
-						<div class="form-panel">
-							<div class="form-panel-header mb-3">
-								<div class="form-title text-gray-800 dark:text-gray-200">
-									{$i18n.t('Models Prompt')}
-								</div>
-							</div>
-							<hr class="form-divider mb-3" />
-							<textarea
-								class="form-textarea"
-								bind:value={agent.params.prompt}
-								placeholder={$i18n.t('Models Prompt Placeholder')}
-								rows={4}
-							/>
-						</div>
-						<!-- 知识库选择 -->
-						<div class="form-panel gradient-panel">
-							<div class="form-panel-header mb-4">
-								<div class="form-title text-gray-800 dark:text-gray-200">
-									{$i18n.t('Models Knowledge Base')}
-								</div>
-							</div>
-							<div class="grid grid-cols-5 gap-6 text-xs mb-5 p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800">
-								<!-- 搜索模式 -->
-								<div class="flex flex-col gap-2 items-center col-span-1"> 
-									<div class="form-title text-gray-700 dark:text-gray-300 mb-1 text-center">
-										{$i18n.t('Models KnowledgeBase Search Mode')}
-									</div>
-									<DropdownSelect
-										bind:value={agent.params.knowledge.settings.searchMode}
-										options={searchModeList}
-										isShowIcon={false}
-										labelClass="text-xs"
-										height="h-7"
-									/>
-								</div>
-								<!-- 引用上限 -->
-								<div class="flex flex-col gap-2 items-center">
-									<div class="form-title text-gray-700 dark:text-gray-300 mb-1 text-center">
-										{$i18n.t('Models KnowledgeBase Use Limit')}
-									</div>
-									<input
-										type="number"
-										class="form-input-sm"
-										bind:value={agent.params.knowledge.settings.limit}
-									/>
-								</div>
-								<!-- 检索相关度 -->
-								<div class="flex flex-col gap-2 items-center">
-									<div class="form-title text-gray-700 dark:text-gray-300 mb-1 text-center">
-										{$i18n.t('Models KnowledgeBase Relevance')}
-									</div>
-									<input
-										type="number"
-										class="form-input-sm"
-										bind:value={agent.params.knowledge.settings.similarity}
-									/>
-								</div>
-								<!-- 内容重排 -->
-								<div class="flex flex-col gap-2 items-center">
-									<div class="form-title text-gray-700 dark:text-gray-300 mb-1 text-center">
-										{$i18n.t('Models KnowledgeBase Content Reordering')}
-									</div>
-									<div class="flex items-center gap-2">
-                                        <Label.Root for="knowledgeContentReordering" class="text-xs font-medium dark:text-gray-300">
-											{agent.params?.knowledge?.settings?.usingReRank ? $i18n.t('On') : $i18n.t('Off')}
-									    </Label.Root>
-										<Switch bind:state={agent.params.knowledge.settings.usingReRank} activeClass="bg-indigo-500" />
-                                    </div>
-								</div>
-								<!-- 优化提问 -->
-								<div class="flex flex-col gap-2 items-center">
-									<div class="form-title text-gray-700 dark:text-gray-300 mb-1 text-center">
-										{$i18n.t('Models KnowledgeBase Optimization')}
-									</div>
-									<div class="flex items-center gap-2">
-                                        <Label.Root for="knowledgeOptimization" class="text-xs font-medium dark:text-gray-300">
-											{agent.params?.knowledge?.settings?.datasetSearchUsingExtensionQuery ? $i18n.t('On') : $i18n.t('Off')}
-									    </Label.Root>
-										<Switch bind:state={agent.params.knowledge.settings.datasetSearchUsingExtensionQuery} activeClass="bg-indigo-500" />
-                                    </div>
-								</div>
-							</div>
-                            <hr class="form-divider mb-3" />
-                            <div class="grid grid-cols-2 gap-3 text-xs mt-3">
-                                {#each knowledgeBases as kb}
-                                    <div 
-                                        class="item-card {agent.params?.knowledge?.items?.includes(kb._id) ? 'selected' : ''}"
-                                        on:click={() => toggleKnowledgeBase(kb._id)}
-                                    >
-                                        <div class="item-card-content">
-                                            <div class="item-badge">KB</div>
-                                            <div class="item-card-title">
-                                                {kb.name}
-                                            </div>
-                                        </div>
-                                    </div>
-                                {/each}
-                            </div>
-						</div>
-                        <!-- 工具选择 -->
-                        <!-- <div class="form-panel gradient-panel">
-                            <div class="form-panel-header mb-3">
-                                <div class="form-title text-gray-800 dark:text-gray-200">
-                                    {$i18n.t('Models Tools')}
-                                </div>
-                                <button class="icon-button accent-button">
-                                    <CirclePlus />
-                                    <span class="text-xs">{$i18n.t('Add')}</span>
-                                </button>
-                            </div>
-                            <hr class="form-divider mb-3" />
-                            <div class="grid grid-cols-2 gap-3 text-xs">
-                                {#each agent.params?.tools as tool, index}
-                                    <div class="item-card">
-                                        <div class="item-card-content">
-                                            <div class="item-badge tool-badge">T</div>
-                                            <div class="item-card-title">
-                                                {tool}
-                                            </div>
-                                        </div>
-                                        <button 
-                                            class="item-delete-button" 
-                                            on:click={() => removeTool(index)}
-                                            aria-label="删除项目"
-                                        >
-                                            <Close />
-                                        </button>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div> -->
 					</div>
 				</div>
 			</div>
@@ -509,7 +213,7 @@
                     <button class="action-button action-button-cancel" on:click={closeModal}>
                         {$i18n.t('Cancel')}
                     </button>
-                    <button class="action-button action-button-save" on:click={confirmHandler}>
+                    <button class="action-button btn-primary" on:click={confirmHandler}>
                         {$i18n.t('Save')}
                     </button>
                 </div>
@@ -690,8 +394,8 @@
 	}
 
 	.action-button-delete {
-		border: 1px solid #ef4444;
-		color: #ef4444;
+		border: 1px solid #000000;
+		color: #000000;
 		background-color: transparent;
 	}
 	
@@ -709,19 +413,6 @@
 	.action-button-cancel:hover {
 		background-color: #9ca3af;
 		color: white;
-	}
-
-	.action-button-save {
-		border: 1px solid #4f46e5;
-		color: white;
-		background-color: #4f46e5;
-		background-image: linear-gradient(to right, #4f46e5, #6366f1);
-	}
-	
-	.action-button-save:hover {
-		background-color: #4338ca;
-		border-color: #4338ca;
-		background-image: linear-gradient(to right, #4338ca, #4f46e5);
 	}
 
 	.item-card {

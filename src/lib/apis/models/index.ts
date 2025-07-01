@@ -99,45 +99,6 @@ export const getWorkflowApps = async (token: string = '', sync: boolean = false)
 	return res;
 };
 
-// 获取知识库列表
-export const getKnowledgeBases = async (token: string = '') => {
-	let error = null;
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/workflows/knowledge_bases`, {
-		method: 'GET',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			const data = await res.json();
-			console.log('getKnowledgeBases res:', data.data);
-			return { data: Array.isArray(data.data) ? data.data : [], success: true };
-		})
-		.catch((err: unknown) => {
-			error = err;
-			console.log('getKnowledgeBases error:', err);
-			const rawError = (err as Record<string, unknown>)?.detail || 
-							 (err as Record<string, unknown>)?.message || 
-							 '获取知识库失败';
-			const errorMessage = cleanErrorMessage(String(rawError));
-			return { data: [], success: false, error: errorMessage };
-		});
-
-	if (error) {
-		console.error('getKnowledgeBases捕获到错误:', error);
-		const rawError = (error as Record<string, unknown>)?.detail || 
-						 (error as Record<string, unknown>)?.message || 
-						 '获取知识库失败';
-		const errorMessage = cleanErrorMessage(String(rawError));
-		return { data: [], success: false, error: errorMessage };
-	}
-	return res;
-};
-
 export const getBaseModels = async (token: string = '') => {
 	let error = null;
 

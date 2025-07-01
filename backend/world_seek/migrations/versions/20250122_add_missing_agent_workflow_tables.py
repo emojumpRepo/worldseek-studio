@@ -33,7 +33,6 @@ def upgrade() -> None:
             sa.Column("base_app_id", sa.Integer(), nullable=True),
             sa.Column("name", sa.Text(), nullable=True),
             sa.Column("description", sa.Text(), nullable=True),
-            sa.Column("params", JSONField(), nullable=True),
             sa.Column("access_control", sa.JSON(), nullable=True),
             sa.Column("is_deleted", sa.Boolean(), nullable=True, default=False),
             sa.Column("updated_at", sa.BigInteger(), nullable=True),

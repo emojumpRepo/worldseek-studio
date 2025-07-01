@@ -59,8 +59,7 @@ export type Agent = {
     base_app_id: string;
     description: string;
     user_id: string;
-    params: Params | null;
     user?: User;
     workflow_app?: Agent;
-    access_control: Record<string, unknown>;
+    access_control: Record<string, unknown> | null;
 };
