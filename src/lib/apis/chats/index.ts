@@ -1055,7 +1055,7 @@ export const archiveAllChats = async (token: string) => {
 
 interface WorkflowParams {
 	stream?: boolean;
-	[key: string]: unknown;
+	[key: string]: any;
 }
 
 interface WorkflowMessage {
@@ -1067,7 +1067,6 @@ export const runLangflowWorkflow = async (
 	token: string = '',
 	workflowId: string,
 	agentId: string,
-	chatId: string,
 	messages: WorkflowMessage[],
 	params: WorkflowParams = {}
 ) => {
@@ -1080,7 +1079,6 @@ export const runLangflowWorkflow = async (
 	const body = {
 		workflow_id: workflowId,
 		agent_id: agentId,
-		chat_id: chatId,
 		messages,
 		params
 	};
@@ -1125,38 +1123,4 @@ export const runLangflowWorkflow = async (
 		const errorMessage = err instanceof Error ? err.message : '未知错误';
 		throw new Error(`Langflow workflow: ${errorMessage}`);
 	}
-};
-
-export const updateChatSessionById = async (token: string, id: string, sessionId: string) => {
-	let error = null;
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/session`, {
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		},
-		body: JSON.stringify({
-			session_id: sessionId
-		})
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.then((json) => {
-			return json;
-		})
-		.catch((err) => {
-			error = err;
-			console.log(err);
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res;
 };

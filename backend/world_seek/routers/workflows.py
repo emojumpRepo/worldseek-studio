@@ -8,16 +8,16 @@ import aiohttp
 import json
 
 from world_seek.agents.agents import (
-    Agents
+    Agents,
+    AgentForm,
+    AgentResponse,
+    AgentModel,
 )
 from world_seek.workflows.workflows import (
     WorkflowForm,
     WorkflowModel,
     WorkflowResponse,
     Workflows,
-)
-from world_seek.models.chats import (
-    Chats
 )
 from world_seek.constants import ERROR_MESSAGES
 from world_seek.utils.auth import get_admin_user, get_verified_user
@@ -496,9 +496,8 @@ async def run_workflow(
     start_time = time.time()
     workflow_id = form_data.get("workflow_id")
     agent_id = form_data.get("agent_id")
-    chat_id = form_data.get("chat_id")
 
-    log.info(f"执行工作流: 工作流ID={workflow_id}, 智能体ID={agent_id}, 用户ID={user.id}, 聊天ID={chat_id}")
+    log.info(f"执行工作流: 工作流ID={workflow_id}, 智能体ID={agent_id}, 用户ID={user.id}")
     
     # 获取最新消息
     messages = form_data.get("messages", [])
@@ -535,9 +534,6 @@ async def run_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
-    
-    # 获取聊天的session_id
-    session_id = Chats.get_session_id_by_chat_id(chat_id)
 
     try:
         # 获取配置的API密钥
@@ -573,7 +569,6 @@ async def run_workflow(
             "input_value": latest_message,
             "input_type": "chat",
             "output_type": "chat",
-            "session_id": session_id,
         }
 
         log.info(f"请求数据: {langflow_data}")

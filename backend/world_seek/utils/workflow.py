@@ -38,7 +38,6 @@ class StreamStats:
     start_time: float = 0.0
     last_log_time: float = 0.0
     accumulated_content: str = ""
-    session_id: Optional[str] = None
 
 class WorkflowError(Exception):
     """工作流相关错误的基类"""
@@ -218,61 +217,17 @@ async def process_stream_chunk(
             try:
                 json_data = json.loads(chunk_text)
                 log.info(f"[DEBUG] 直接解析的JSON数据: {json.dumps(json_data, ensure_ascii=False, indent=2)[:800]}{'...' if len(str(json_data)) > 800 else ''}")
-                
-                # 处理 Langflow 的特殊事件格式
-                if json_data.get('event') == 'token' and 'data' in json_data and 'chunk' in json_data['data']:
-                    # 处理 token 事件
-                    token_content = json_data['data']['chunk']
-                    log.info(f"[DEBUG] 处理token事件，内容: {token_content}")
-                    if token_content:
-                        stats.accumulated_content += token_content
-                        yield f"data: {json.dumps({'content': token_content})}\n\n"
-                elif json_data.get('event') == 'end' and 'data' in json_data and 'result' in json_data['data']:
-                    # 处理 end 事件
-                    result = json_data['data']['result']
-                    log.info(f"[DEBUG] 处理end事件，result: {result}")
-                    
-                    # 保存 session_id
-                    if 'session_id' in json_data['data']['result']:
-                        stats.session_id = json_data['data']['result']['session_id']
-                        log.info(f"[DEBUG] 保存session_id: {stats.session_id}")
-                    
-                    if 'message' in result:
-                        final_content = result['message']
-                        log.info(f"[DEBUG] 从end事件获取最终消息: {final_content[:100]}{'...' if len(final_content) > 100 else ''}")
-                        # 使用最终完整消息替换累积内容
-                        stats.accumulated_content = final_content
-                        
-                        # 构建 langflow-complete 事件，包含 session_id
-                        complete_data = {
-                            'id': 'langflow-complete',
-                            'complete': True,
-                            'content': final_content
-                        }
-                        if stats.session_id:
-                            complete_data['session_id'] = stats.session_id
-                            log.info(f"[DEBUG] 在完成事件中包含session_id: {stats.session_id}")
-                            
-                        yield f"data: {json.dumps(complete_data)}\n\n"
-                elif json_data.get('event') == 'add_message':
-                    # 处理 add_message 事件（可能包含初始消息信息）
-                    log.info(f"[DEBUG] 处理add_message事件")
-                    # 这类事件通常不包含内容，只是消息元数据，可以忽略或记录
-                else:
-                    # 使用原有的处理逻辑处理其他格式
-                    async for chunk in process_json_data(json_data):
-                        log.info(f"[DEBUG] 生成的响应块: {chunk[:200]}{'...' if len(chunk) > 200 else ''}")
-                        yield chunk
-                        
+                async for chunk in process_json_data(json_data):
+                    log.info(f"[DEBUG] 生成的响应块: {chunk[:200]}{'...' if len(chunk) > 200 else ''}")
+                    yield chunk
             except json.JSONDecodeError:
                 log.info(f"[DEBUG] 无法解析为JSON，作为纯文本处理: {chunk_text[:200]}{'...' if len(chunk_text) > 200 else ''}")
-                # 检查是否是空行或只包含空白字符
-                if chunk_text.strip():
-                    # 只有真正有内容的文本才处理
+                if chunk_text.strip():  # 只有非空内容才作为普通文本处理
                     yield f"data: {json.dumps({'content': chunk_text})}\n\n"
                     stats.accumulated_content += chunk_text
-                # 移除空数据的错误报告，因为空行在流式响应中是正常的
-                
+                else:
+                    error_data = {"error": {"detail": "接收到空数据响应，请检查工作流配置"}}
+                    yield f"data: {json.dumps(error_data)}\n\n"
     except Exception as e:
         log.error(f"处理数据块错误: {e}")
         error_data = {"error": {"detail": f"数据处理异常: {str(e)[:100]}，请联系管理员"}}
@@ -411,8 +366,7 @@ async def langflow_stream_generator(
                         complete_response = {
                             "id": "langflow-complete",
                             "complete": True,
-                            "content": stats.accumulated_content,
-                            "session_id": stats.session_id
+                            "content": stats.accumulated_content
                         }
                         yield f"data: {json.dumps(complete_response)}\n\n"
                     else:
