@@ -63,7 +63,8 @@
 		getChatById,
 		getChatList,
 		getTagsById,
-		updateChatById
+		updateChatById,
+		updateChatSessionById
 	} from '$lib/apis/chats';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
@@ -1553,13 +1554,13 @@
 				localStorage.token,
 				model.base_app_id,
 				model.id,
+				_chatId || '',
 				createMessagesList(_history, responseMessageId).map((message) => ({
 					role: message.role,
 					content: message.content
 				})),
 				{
 					stream: useStream,
-					session_id: history.id
 				}
 			);
 
@@ -1887,6 +1888,7 @@
 		const decoder = new TextDecoder('utf-8');
 		let accumulatedContent = responseMessage?.content || '';
 		let receivedCompleteResponse = false;
+		let langflowSessionId = null; // 存储从流中获取的session_id
 
 		try {
 			// 确保responseMessage对象存在且有id
@@ -1954,9 +1956,16 @@
 							continue;
 						}
 						
-						// 处理完整响应消息
+						// 处理完整响应消息和session_id
 						if (jsonData.id === 'langflow-complete' && jsonData.complete === true) {
 							console.log('收到完整响应内容，长度：', jsonData.content?.length || 0);
+							
+							// 提取session_id
+							if (jsonData.session_id) {
+								langflowSessionId = jsonData.session_id;
+								console.log('从完成响应中获取到session_id:', langflowSessionId);
+							}
+							
 							if (jsonData.content && jsonData.content.length > 0) {
 								accumulatedContent = jsonData.content;
 								responseMessage.content = accumulatedContent;
@@ -2002,11 +2011,34 @@
 
 			}
 			
-			// 流式完成后记录日志
+			// 流式完成后的处理
 			if (receivedCompleteResponse) {
 				console.log('流式响应完成，使用后端提供的完整内容');
 			} else {
 				console.log('流式响应完成，使用前端累积的内容');
+			}
+			
+			// 处理session_id更新
+			if (langflowSessionId && $chatId && !$temporaryChatEnabled) {
+				try {
+					// 检查当前聊天的session_id是否与新的不同
+					const currentSessionId = chat?.session_id || '';  // 保持这个作为后备，因为可能存在旧数据
+					if (currentSessionId !== langflowSessionId) {
+						console.log('Session_id发生变化，更新数据库:', currentSessionId, '->', langflowSessionId);
+						await updateChatSessionById(localStorage.token, $chatId, langflowSessionId);
+						console.log('Session_id更新完成');
+						
+						// 更新本地chat对象
+						if (chat) {
+							chat.session_id = langflowSessionId;
+						}
+					} else {
+						console.log('Session_id未发生变化，跳过更新');
+					}
+				} catch (error) {
+					console.error('更新session_id失败:', error);
+					// 不抛出错误，避免影响主要的聊天流程
+				}
 			}
 			
 			// 确保最终状态被正确设置

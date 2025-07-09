@@ -804,3 +804,36 @@ async def delete_all_tags_by_id(id: str, user=Depends(get_verified_user)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
         )
+
+############################
+# UpdateChatSessionById
+############################
+class SessionUpdateForm(BaseModel):
+    session_id: str
+
+
+@router.post("/{id}/session", response_model=Optional[ChatResponse])
+async def update_chat_session_by_id(
+    id: str, form_data: SessionUpdateForm, user=Depends(get_verified_user)
+):
+    """更新聊天的 session_id"""
+    chat = Chats.get_chat_by_id_and_user_id(id, user.id)
+    if chat:
+        # 检查新的 session_id 是否与当前的不同
+        current_session_id = chat.session_id  # 现在 session_id 是必填字段，不需要默认值
+        new_session_id = form_data.session_id
+        
+        log.info(f"当前 session_id: {current_session_id}")
+        log.info(f"新的 session_id: {new_session_id}")
+        
+        if current_session_id != new_session_id:
+            log.info("Session_id 发生变化，更新数据库")
+            chat = Chats.update_chat_session_id_by_id(id, new_session_id)
+            return ChatResponse(**chat.model_dump())
+        else:
+            log.info("Session_id 未发生变化，跳过更新")
+            return ChatResponse(**chat.model_dump())
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.DEFAULT()
+        )

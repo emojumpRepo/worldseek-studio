@@ -38,6 +38,7 @@ class Chat(Base):
 
     meta = Column(JSON, server_default="{}")
     folder_id = Column(Text, nullable=True)
+    session_id = Column(String, nullable=False)
 
 
 class ChatModel(BaseModel):
@@ -57,6 +58,7 @@ class ChatModel(BaseModel):
 
     meta: dict = {}
     folder_id: Optional[str] = None
+    session_id: str
 
 
 ####################
@@ -66,12 +68,14 @@ class ChatModel(BaseModel):
 
 class ChatForm(BaseModel):
     chat: dict
+    session_id: Optional[str] = None
 
 
 class ChatImportForm(ChatForm):
     meta: Optional[dict] = {}
     pinned: Optional[bool] = False
     folder_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class ChatTitleMessagesForm(BaseModel):
@@ -95,6 +99,7 @@ class ChatResponse(BaseModel):
     pinned: Optional[bool] = False
     meta: dict = {}
     folder_id: Optional[str] = None
+    session_id: str
 
 
 class ChatTitleIdResponse(BaseModel):
@@ -108,6 +113,9 @@ class ChatTable:
     def insert_new_chat(self, user_id: str, form_data: ChatForm) -> Optional[ChatModel]:
         with get_db() as db:
             id = str(uuid.uuid4())
+            # 如果未提供 session_id，则自动生成一个唯一的 session_id
+            session_id = form_data.session_id or str(uuid.uuid4())
+            
             chat = ChatModel(
                 **{
                     "id": id,
@@ -118,6 +126,7 @@ class ChatTable:
                         else "New Chat"
                     ),
                     "chat": form_data.chat,
+                    "session_id": session_id,
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }
@@ -134,6 +143,9 @@ class ChatTable:
     ) -> Optional[ChatModel]:
         with get_db() as db:
             id = str(uuid.uuid4())
+            # 如果未提供 session_id，则自动生成一个唯一的 session_id
+            session_id = form_data.session_id or str(uuid.uuid4())
+            
             chat = ChatModel(
                 **{
                     "id": id,
@@ -147,6 +159,7 @@ class ChatTable:
                     "meta": form_data.meta,
                     "pinned": form_data.pinned,
                     "folder_id": form_data.folder_id,
+                    "session_id": session_id,
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }
@@ -164,6 +177,19 @@ class ChatTable:
                 chat_item = db.get(Chat, id)
                 chat_item.chat = chat
                 chat_item.title = chat["title"] if "title" in chat else "New Chat"
+                chat_item.updated_at = int(time.time())
+                db.commit()
+                db.refresh(chat_item)
+
+                return ChatModel.model_validate(chat_item)
+        except Exception:
+            return None
+
+    def update_chat_session_id_by_id(self, id: str, session_id: str) -> Optional[ChatModel]:
+        try:
+            with get_db() as db:
+                chat_item = db.get(Chat, id)
+                chat_item.session_id = session_id
                 chat_item.updated_at = int(time.time())
                 db.commit()
                 db.refresh(chat_item)
@@ -489,6 +515,43 @@ class ChatTable:
             with get_db() as db:
                 chat = db.query(Chat).filter_by(id=id, user_id=user_id).first()
                 return ChatModel.model_validate(chat)
+        except Exception:
+            return None
+        
+    def get_session_id_by_chat_id(self, chat_id: str) -> Optional[str]:
+        try:
+            with get_db() as db:
+                chat = db.query(Chat).filter_by(id=chat_id).first()
+                # 由于 session_id 现在是必填字段，应该总是存在，但为了安全还是保持 Optional 返回类型
+                return chat.session_id if chat else None
+        except Exception:
+            return None
+
+    def get_chats_by_session_id(self, session_id: str) -> list[ChatModel]:
+        with get_db() as db:
+            all_chats = (
+                db.query(Chat)
+                .filter_by(session_id=session_id)
+                .order_by(Chat.updated_at.desc())
+                .all()
+            )
+            return [ChatModel.model_validate(chat) for chat in all_chats]
+
+    def get_chats_by_session_id_and_user_id(self, session_id: str, user_id: str) -> list[ChatModel]:
+        with get_db() as db:
+            all_chats = (
+                db.query(Chat)
+                .filter_by(session_id=session_id, user_id=user_id)
+                .order_by(Chat.updated_at.desc())
+                .all()
+            )
+            return [ChatModel.model_validate(chat) for chat in all_chats]
+
+    def get_chat_by_session_id_and_user_id(self, session_id: str, user_id: str) -> Optional[ChatModel]:
+        try:
+            with get_db() as db:
+                chat = db.query(Chat).filter_by(session_id=session_id, user_id=user_id).first()
+                return ChatModel.model_validate(chat) if chat else None
         except Exception:
             return None
 
@@ -889,6 +952,38 @@ class ChatTable:
         try:
             with get_db() as db:
                 db.query(Chat).filter_by(user_id=user_id, folder_id=folder_id).delete()
+                db.commit()
+
+                return True
+        except Exception:
+            return False
+
+    def delete_chats_by_session_id(self, session_id: str) -> bool:
+        try:
+            with get_db() as db:
+                # 获取所有该session_id的聊天，并删除相关的共享聊天
+                chats = db.query(Chat).filter_by(session_id=session_id).all()
+                for chat in chats:
+                    self.delete_shared_chat_by_chat_id(chat.id)
+                
+                # 删除session_id相关的聊天
+                db.query(Chat).filter_by(session_id=session_id).delete()
+                db.commit()
+
+                return True
+        except Exception:
+            return False
+
+    def delete_chats_by_session_id_and_user_id(self, session_id: str, user_id: str) -> bool:
+        try:
+            with get_db() as db:
+                # 获取所有该session_id和user_id的聊天，并删除相关的共享聊天
+                chats = db.query(Chat).filter_by(session_id=session_id, user_id=user_id).all()
+                for chat in chats:
+                    self.delete_shared_chat_by_chat_id(chat.id)
+                
+                # 删除session_id和user_id相关的聊天
+                db.query(Chat).filter_by(session_id=session_id, user_id=user_id).delete()
                 db.commit()
 
                 return True
