@@ -13,12 +13,16 @@
 	let apiKeysConfig = {
 		langflow_api_key_masked: '',
 		langflow_base_url: '',
+		fastgpt_api_key_masked: '',
+		fastgpt_base_url: '',
 	};
 
 	// 编辑状态的配置
 	let editConfig = {
 		langflow_api_key: '',
 		langflow_base_url: '',
+		fastgpt_api_key: '',
+		fastgpt_base_url: '',
 	};
 
 	const loadApiKeysConfig = async () => {
@@ -29,6 +33,7 @@
 				apiKeysConfig = config;
 				// 初始化编辑配置
 				editConfig.langflow_base_url = config.langflow_base_url || '';
+				editConfig.fastgpt_base_url = config.fastgpt_base_url || '';
 			}
 		} catch (error) {
 			console.error('获取API密钥配置失败:', error);
@@ -50,6 +55,12 @@
 			if (editConfig.langflow_base_url?.trim()) {
 				updateData.langflow_base_url = editConfig.langflow_base_url.trim();
 			}
+			if (editConfig.fastgpt_api_key?.trim()) {
+				updateData.fastgpt_api_key = editConfig.fastgpt_api_key.trim();
+			}
+			if (editConfig.fastgpt_base_url?.trim()) {
+				updateData.fastgpt_base_url = editConfig.fastgpt_base_url.trim();
+			}
 
 			if (Object.keys(updateData).length === 0) {
 				toast.error('请至少填写一项配置');
@@ -63,6 +74,7 @@
 				await loadApiKeysConfig();
 				// 清空编辑框中的密钥
 				editConfig.langflow_api_key = '';
+				editConfig.fastgpt_api_key = '';
 			}
 		} catch (error) {
 			console.error('保存API密钥配置失败:', error);
@@ -89,7 +101,7 @@
 			<Spinner />
 		</div>
 	{:else}
-		<div class="space-y-4">
+		<div class="space-y-2">
 			<!-- WorldSeek Agent 配置 -->
 			<div class="p-2">
 				<div
@@ -101,6 +113,7 @@
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div class="space-y-2">
 						<label
+							for="langflow-api-key"
 							class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300"
 						>
 							<span>API密钥</span>
@@ -119,6 +132,7 @@
 							{/if}
 						</label>
 						<input
+							id="langflow-api-key"
 							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 							type="text"
 							placeholder="输入新的WorldSeek Agent API密钥"
@@ -127,14 +141,68 @@
 					</div>
 
 					<div class="space-y-2 flex flex-col">
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex-1">
+						<label for="langflow-base-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex-1">
 							API基础URL（注意：URL需保留 "/api/v1" 后缀）
 						</label>
 						<input
+							id="langflow-base-url"
 							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 							type="url"
 							placeholder="例如: https://uat.worldseek-ai.com/api/v1，留空表示使用默认值"
 							bind:value={editConfig.langflow_base_url}
+						/>
+					</div>
+				</div>
+			</div>
+
+			<!-- FastGPT 配置 -->
+			<div class="p-2">
+				<div
+					class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2"
+				>
+					FastGPT 配置
+				</div>
+
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="space-y-2">
+						<label
+							for="fastgpt-api-key"
+							class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300"
+						>
+							<span>API密钥</span>
+							{#if apiKeysConfig.fastgpt_api_key_masked}
+								<span
+									class="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded"
+								>
+									已配置: {apiKeysConfig.fastgpt_api_key_masked.slice(0, 4)}*******{apiKeysConfig.fastgpt_api_key_masked.slice(-4)}
+								</span>
+							{:else}
+								<span
+									class="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded"
+								>
+									未配置
+								</span>
+							{/if}
+						</label>
+						<input
+							id="fastgpt-api-key"
+							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							type="text"
+							placeholder="输入新的FastGPT API密钥"
+							bind:value={editConfig.fastgpt_api_key}
+						/>
+					</div>
+
+					<div class="space-y-2 flex flex-col">
+						<label for="fastgpt-base-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 flex-1">
+							API基础URL（注意：URL无需添加后缀，如：http://fastgpt.example.com:4000）
+						</label>
+						<input
+							id="fastgpt-base-url"
+							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							type="url"
+							placeholder="例如: http://fastgpt.example.com:4000，留空表示使用默认值"
+							bind:value={editConfig.fastgpt_base_url}
 						/>
 					</div>
 				</div>
@@ -175,6 +243,7 @@
 							<li>• 管理员配置的API密钥将被所有用户的工作流和知识库功能使用</li>
 							<li>• API密钥以脱敏形式显示，只显示前4位和后4位字符</li>
 							<li>• URL字段可选，未配置时将使用环境变量中的默认值</li>
+							<li>• WorldSeek Agent用于工作流功能，FastGPT用于知识库功能</li>
 						</ul>
 					</div>
 				</div>

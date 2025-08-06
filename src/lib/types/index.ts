@@ -62,4 +62,5 @@ export type Agent = {
     user?: User;
     workflow_app?: Agent;
     access_control: Record<string, unknown> | null;
+    params?: string | Record<string, unknown>;
 };

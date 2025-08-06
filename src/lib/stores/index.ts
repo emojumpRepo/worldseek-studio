@@ -54,7 +54,7 @@ export const tags = writable([]);
 export const models: Writable<Agent[]> = writable([]);
 
 export const prompts: Writable<null | Prompt[]> = writable(null);
-export const knowledge: Writable<null | Document[]> = writable(null);
+export const knowledge: Writable<null | (Document | KnowledgeBase)[]> = writable(null);
 export const tools = writable(null);
 export const functions = writable(null);
 
@@ -196,6 +196,20 @@ type Document = {
 	filename: string;
 	name: string;
 	title: string;
+};
+
+type KnowledgeBase = {
+	id: string;
+	user_id: string;
+	name: string;
+	description: string;
+	data?: any;
+	meta?: any;
+	access_control?: any;
+	created_at: number;
+	updated_at?: number;
+	user?: any;
+	files?: any[];
 };
 
 type Config = {

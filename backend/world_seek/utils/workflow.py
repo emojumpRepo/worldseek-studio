@@ -232,14 +232,34 @@ async def process_stream_chunk(
                     result = json_data['data']['result']
                     log.info(f"[DEBUG] 处理end事件，result: {result}")
                     
-                    # 保存 session_id
-                    if 'session_id' in json_data['data']['result']:
-                        stats.session_id = json_data['data']['result']['session_id']
-                        log.info(f"[DEBUG] 保存session_id: {stats.session_id}")
+                    # # 保存 session_id
+                    # if 'session_id' in json_data['data']['result']:
+                    #     stats.session_id = json_data['data']['result']['session_id']
+                    #     log.info(f"[DEBUG] 保存session_id: {stats.session_id}")
                     
+                    # 尝试从复杂的数据结构中提取最终内容
+                    final_content = None
+                    
+                    # 方法1: 直接从result中提取message
                     if 'message' in result:
                         final_content = result['message']
-                        log.info(f"[DEBUG] 从end事件获取最终消息: {final_content[:100]}{'...' if len(final_content) > 100 else ''}")
+                        log.info(f"[DEBUG] 从result.message获取最终消息: {final_content[:100]}{'...' if len(final_content) > 100 else ''}")
+                    
+                    # 方法2: 从outputs结构中提取内容
+                    elif 'outputs' in result and result['outputs']:
+                        for output in result['outputs']:
+                            if 'outputs' in output and output['outputs']:
+                                for inner_output in output['outputs']:
+                                    if 'results' in inner_output and 'message' in inner_output['results']:
+                                        message = inner_output['results']['message']
+                                        if 'data' in message and 'text' in message['data']:
+                                            final_content = message['data']['text']
+                                            log.info(f"[DEBUG] 从outputs结构获取最终消息: {final_content[:100]}{'...' if len(final_content) > 100 else ''}")
+                                            break
+                                if final_content:
+                                    break
+                    
+                    if final_content:
                         # 使用最终完整消息替换累积内容
                         stats.accumulated_content = final_content
                         
@@ -254,10 +274,35 @@ async def process_stream_chunk(
                             log.info(f"[DEBUG] 在完成事件中包含session_id: {stats.session_id}")
                             
                         yield f"data: {json.dumps(complete_data)}\n\n"
+                    else:
+                        log.warning("[DEBUG] 无法从end事件中提取内容")
                 elif json_data.get('event') == 'add_message':
                     # 处理 add_message 事件（可能包含初始消息信息）
                     log.info(f"[DEBUG] 处理add_message事件")
                     # 这类事件通常不包含内容，只是消息元数据，可以忽略或记录
+                elif json_data.get('event') == 'end' and 'data' in json_data and 'result' in json_data['data']:
+                    # 处理 end 事件，提取最终文本内容
+                    result = json_data['data']['result']
+                    final_content = None
+                    
+                    # 尝试从复杂的数据结构中提取最终内容
+                    if 'outputs' in result and result['outputs']:
+                        for output in result['outputs']:
+                            if 'outputs' in output and output['outputs']:
+                                for inner_output in output['outputs']:
+                                    if 'results' in inner_output and 'message' in inner_output['results']:
+                                        message = inner_output['results']['message']
+                                        if 'data' in message and 'text' in message['data']:
+                                            final_content = message['data']['text']
+                                            log.info(f"[DEBUG] 从end事件提取最终内容: {final_content[:100]}{'...' if len(final_content) > 100 else ''}")
+                                            break
+                                if final_content:
+                                    break
+                    
+                    if final_content:
+                        # 只返回纯文本内容，不返回JSON结构
+                        yield f"data: {final_content}\n\n"
+                        stats.accumulated_content = final_content
                 else:
                     # 使用原有的处理逻辑处理其他格式
                     async for chunk in process_json_data(json_data):
@@ -348,15 +393,26 @@ async def langflow_stream_generator(
                                     if 'outputs' in output and output['outputs']:
                                         for j, inner_output in enumerate(output['outputs']):
                                             log.info(f"[DEBUG] 处理inner_output #{j}: {list(inner_output.keys())}")
+                                            # 尝试从不同的结构中提取内容
+                                            content = None
+                                            
+                                            # 方法1: 从outputs.message中提取
                                             if 'outputs' in inner_output and 'message' in inner_output['outputs']:
                                                 message = inner_output['outputs']['message']
                                                 log.info(f"[DEBUG] 找到message: {list(message.keys())}")
                                                 if 'message' in message:
                                                     content = message['message']
-                                                    if content:
-                                                        log.info(f"[DEBUG] 提取到内容: {content[:100]}{'...' if len(content) > 100 else ''}")
-                                                        yield f"data: {json.dumps({'content': content})}\n\n"
-                                                        stats.accumulated_content += content
+                                            
+                                            # 方法2: 从results.message.data.text中提取
+                                            elif 'results' in inner_output and 'message' in inner_output['results']:
+                                                message = inner_output['results']['message']
+                                                if 'data' in message and 'text' in message['data']:
+                                                    content = message['data']['text']
+                                            
+                                            if content:
+                                                log.info(f"[DEBUG] 提取到内容: {content[:100]}{'...' if len(content) > 100 else ''}")
+                                                yield f"data: {json.dumps({'content': content})}\n\n"
+                                                stats.accumulated_content += content
                         elif json_data.get('event') == 'token' and 'data' in json_data and 'chunk' in json_data['data']:
                             token_content = json_data['data']['chunk']
                             log.info(f"[DEBUG] 发现token事件，内容: {token_content[:100]}{'...' if len(token_content) > 100 else ''}")

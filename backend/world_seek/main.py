@@ -73,6 +73,7 @@ from world_seek.routers import (
     memories,
     models,
     knowledge,
+    knowledge_bases,
     prompts,
     evaluations,
     tools,
@@ -963,6 +964,9 @@ app.include_router(configs.router, prefix="/api/v1/configs", tags=["configs"])
 # API密钥配置路由
 from world_seek.routers import user_api_configs
 app.include_router(user_api_configs.router, prefix="/api/v1", tags=["api-keys"])
+
+# 知识库路由
+app.include_router(knowledge_bases.router, prefix="/api/v1/knowledge-bases", tags=["knowledge-bases"])
 
 app.include_router(auths.router, prefix="/api/v1/auths", tags=["auths"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])

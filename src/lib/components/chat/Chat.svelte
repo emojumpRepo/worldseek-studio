@@ -1520,6 +1520,10 @@
 		}
 
 		let files = JSON.parse(JSON.stringify(chatFiles));
+		console.log('[DEBUG] chatFiles:', chatFiles);
+		console.log('[DEBUG] userMessage?.files:', userMessage?.files);
+		console.log('[DEBUG] responseMessage?.files:', responseMessage?.files);
+		
 		files.push(
 			...(userMessage?.files ?? []).filter((item) =>
 				['doc', 'file', 'collection'].includes(item.type)
@@ -1531,6 +1535,7 @@
 			(item, index, array) =>
 				array.findIndex((i) => JSON.stringify(i) === JSON.stringify(item)) === index
 		);
+		console.log('[DEBUG] 最终传递给runLangflowWorkflow的files:', files);
 
 		scrollToBottom();
 		
@@ -1561,7 +1566,8 @@
 				})),
 				{
 					stream: useStream,
-				}
+				},
+				files // 传递文件信息
 			);
 
 			if (res) {

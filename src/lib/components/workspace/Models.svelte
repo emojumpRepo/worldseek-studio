@@ -12,7 +12,8 @@
 		deleteModelById,
 		getModels as getWorkspaceModels,
 		updateModelById,
-		createNewModel
+		createNewModel,
+		getWorkflowApps
 	} from '$lib/apis/models';
 
 	import { getModels } from '$lib/apis';
@@ -124,6 +125,8 @@
 
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
+		const workflowApps = await getWorkflowApps(localStorage.token, true);
+		console.log('workflowApps', workflowApps);
 		console.log('models', models);
 		let groups = await getGroups(localStorage.token);
 		group_ids = groups.map((group: any) => group.id);

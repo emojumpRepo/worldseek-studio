@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import { Label, RadioGroup } from 'bits-ui';
+	import { Label, RadioGroup, Checkbox } from 'bits-ui';
 	import Close from '$lib/components/icons/Close.svelte';
     import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import { getFastGPTKnowledgeBases } from '$lib/apis';
 	import type { Agent } from '$lib/types';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
 
-	const i18n = getContext('i18n');
+	const i18n: Writable<i18nType> = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
 	export let show = false;
@@ -19,26 +22,192 @@
 		access_control: {}
 	};
 	
-	// 初始化描述信息（首次显示时）
+	// 创建agent的本地副本用于编辑
+	let localAgent: Agent = {...agent};
+	let originalAgent: Agent = {...agent};
+	
+	// 初始化本地副本（首次显示时）
 	let isFirstShow = true;
     $: if (show && isFirstShow) {
         isFirstShow = false;
-        if (!agent.description) {
-            agent.description = agent.workflow_app?.description || '';
+        // 保存原始数据
+        originalAgent = JSON.parse(JSON.stringify(agent));
+        // 创建编辑副本
+        localAgent = JSON.parse(JSON.stringify(agent));
+        if (!localAgent.description) {
+            localAgent.description = localAgent.workflow_app?.description || '';
         }
+		// 加载知识库列表
+		loadKnowledgeBases();
     }
 
-	// 从agent.access_control派生accessControl值
+	// 从localAgent.access_control派生accessControl值
 	let accessControl = 'private';
-	$: accessControl = agent.access_control ? 'private' : 'public';
+	$: accessControl = localAgent.access_control ? 'private' : 'public';
 
-	// 当RadioGroup选择变化时手动更新agent
+	// 当RadioGroup选择变化时手动更新localAgent
 	function handleAccessChange(value: string) {
 		if (value === 'public') {
-			agent.access_control = null;
+			localAgent.access_control = null;
 		} else {
-			agent.access_control = {};
+			localAgent.access_control = {};
 		}
+	}
+
+	// 处理最大Tokens数量输入
+	function handleLimitInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseInt(target.value);
+		if (!isNaN(value)) {
+			if (value < 0) {
+				knowledgeParams.limit = 0;
+			} else if (value > 32000) {
+				knowledgeParams.limit = 32000;
+			} else {
+				knowledgeParams.limit = value;
+			}
+		} else {
+			knowledgeParams.limit = 4000;
+		}
+	}
+
+	// 处理最低相关度输入
+	function handleSimilarityInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value)) {
+			if (value < 0) {
+				knowledgeParams.similarity = 0;
+			} else if (value > 1) {
+				knowledgeParams.similarity = 1;
+			} else {
+				knowledgeParams.similarity = Math.round(value * 100) / 100; // 保留2位小数
+			}
+		} else {
+			knowledgeParams.similarity = 0.1;
+		}
+	}
+
+	// 知识库参数相关
+	let selectedKnowledgeBases: string[] = [];
+	let knowledgeParams = {
+		datasetIds: [] as string[],
+		limit: 4000,
+		similarity: 0.1 as number | null,
+		searchMode: 'embedding',
+		usingReRank: false,
+		datasetSearchUsingExtensionQuery: false,
+		datasetSearchExtensionBg: ''
+	};
+
+	let isInitialized = false;
+	
+	// 初始化知识库参数
+	$: if (show && !isInitialized) {
+		let params = null;
+		
+		// 如果 localAgent.params 为 null，设置默认值
+		if (localAgent.params === null || localAgent.params === undefined) {
+			params = {
+				knowledgeBases: [],
+				datasetIds: [],
+				limit: 4000,
+				similarity: 0.1,
+				searchMode: 'embedding',
+				usingReRank: false,
+				datasetSearchUsingExtensionQuery: false,
+				datasetSearchExtensionBg: ''
+			};
+		} else {
+			// 如果params是字符串，解析为对象；如果已经是对象，直接使用
+			params = typeof localAgent.params === 'string' ? JSON.parse(localAgent.params) : localAgent.params;
+		}
+		
+		if (params) {
+			selectedKnowledgeBases = params.knowledgeBases || params.datasetIds || [];
+			knowledgeParams = {
+				datasetIds: params.datasetIds || params.knowledgeBases || [],
+				limit: params.limit || 4000,
+				similarity: params.similarity || 0.1,
+				searchMode: params.searchMode || 'embedding',
+				usingReRank: params.usingReRank || false,
+				datasetSearchUsingExtensionQuery: params.datasetSearchUsingExtensionQuery || false,
+				datasetSearchExtensionBg: params.datasetSearchExtensionBg || ''
+			};
+		}
+		isInitialized = true;
+	}
+
+	// 知识库列表数据
+	let knowledgeList: Array<{
+		id: string;
+		name: string;
+		description: string;
+		avatar?: string;
+		vectorModel?: Record<string, any>;
+		tags?: string[];
+		createTime?: string;
+		updateTime?: string;
+		type?: string;
+		status?: string;
+	}> = [];
+	let loadingKnowledgeBases = false;
+	let knowledgeBasesError = '';
+
+	// 加载FastGPT知识库列表
+	const loadKnowledgeBases = async () => {
+		if (!show) return;
+
+		loadingKnowledgeBases = true;
+		knowledgeBasesError = '';
+		
+		try {
+			const token = localStorage.getItem('token');
+			if (!token) {
+				throw new Error('未找到认证令牌');
+			}
+
+			const response = await getFastGPTKnowledgeBases(token);
+			if (response && Array.isArray(response)) {
+				knowledgeList = response;
+				
+				// 验证当前选中的知识库ID是否仍然有效，移除无效的ID
+				if (selectedKnowledgeBases.length > 0) {
+					const validKnowledgeBaseIds = new Set(knowledgeList.map(kb => kb.id));
+					const originalSelectedCount = selectedKnowledgeBases.length;
+					const validatedSelectedKnowledgeBases = selectedKnowledgeBases.filter(id => 
+						validKnowledgeBaseIds.has(id)
+					);
+					
+					if (validatedSelectedKnowledgeBases.length !== originalSelectedCount) {
+						selectedKnowledgeBases = validatedSelectedKnowledgeBases;
+						const removedCount = originalSelectedCount - validatedSelectedKnowledgeBases.length;
+						console.warn(`智能体设置初始化时已移除 ${removedCount} 个无效的知识库ID`);
+					}
+				}
+			} else {
+				knowledgeList = [];
+				
+				// 知识库列表为空时，清空选中的知识库ID
+				if (selectedKnowledgeBases.length > 0) {
+					console.warn('知识库列表为空，已清空选中的知识库');
+					selectedKnowledgeBases = [];
+				}
+			}
+		} catch (error) {
+			console.error('加载知识库列表失败:', error);
+			knowledgeBasesError = typeof error === 'string' 
+				? error 
+				: (error as any)?.message || '加载知识库列表失败';
+			knowledgeList = [];
+		} finally {
+			loadingKnowledgeBases = false;
+		}
+	};
+
+	// 同步 selectedKnowledgeBases 和 datasetIds
+	$: if (knowledgeParams && selectedKnowledgeBases) {
+		knowledgeParams.datasetIds = [...selectedKnowledgeBases];
 	}
 
 	let modalElement: HTMLElement | null = null;
@@ -52,23 +221,52 @@
 		}
 	};
 
-	// 关闭弹窗
+	// 关闭弹窗（取消操作）
 	const closeModal = () => {
 		if (isClosing) return;
 		isClosing = true;
+		// 恢复原始数据（取消修改）
+		Object.assign(agent, originalAgent);
 		setTimeout(() => {
 			isClosing = false;
 			show = false;
 			isFirstShow = true; // 重置标志，以便下次打开弹窗时再次设置默认描述
+			isInitialized = false; // 重置初始化标志，以便下次打开时重新初始化知识库参数
 		}, 200); // 动画持续时间
 	};
 
     // 保存智能体设置
 	const confirmHandler = async () => {
         // 如果描述信息为空，则设置为官方应用的描述信息
-        if(!agent.description) {
-            agent.description = agent.workflow_app?.description || '';
+        if(!localAgent.description) {
+            localAgent.description = localAgent.workflow_app?.description || '';
         }
+        
+        // 验证知识库ID的有效性，移除不存在的知识库ID
+        const validKnowledgeBaseIds = new Set(knowledgeList.map(kb => kb.id));
+        const originalSelectedCount = selectedKnowledgeBases.length;
+        const validatedSelectedKnowledgeBases = selectedKnowledgeBases.filter(id => 
+            validKnowledgeBaseIds.has(id)
+        );
+        
+        // 如果有无效的知识库ID被移除，更新选中状态
+        if (validatedSelectedKnowledgeBases.length !== originalSelectedCount) {
+            selectedKnowledgeBases = validatedSelectedKnowledgeBases;
+            const removedCount = originalSelectedCount - validatedSelectedKnowledgeBases.length;
+            console.warn(`已移除 ${removedCount} 个无效的知识库ID`);
+        }
+        
+        // 保存知识库参数到params字段
+        const params = {
+            ...knowledgeParams,
+            datasetIds: validatedSelectedKnowledgeBases // 使用验证后的知识库ID列表
+        };
+        localAgent.params = params;
+        
+        // 将localAgent的修改应用到原始agent
+        Object.assign(agent, localAgent);
+		console.log('agent', agent);
+        
         dispatch('confirm', agent);
 	};
 
@@ -154,7 +352,7 @@
 						<input
 							type="text"
 							class="form-input"
-							bind:value={agent.name}
+							bind:value={localAgent.name}
 							placeholder={$i18n.t('Model Name Placeholder')}
 						/>
 					</div>
@@ -166,7 +364,7 @@
 						</div>
 						<textarea
 							class="form-input"
-							bind:value={agent.description}
+							bind:value={localAgent.description}
 							placeholder={$i18n.t('Model Description Placeholder')}
 							rows={3}
 						/>
@@ -202,6 +400,223 @@
 							</div>
 						</RadioGroup.Root>
 					</div>
+
+					<!-- 知识库配置 表单项 -->
+					<div class="form-group p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+						<div class="form-title mb-3 text-gray-800 dark:text-gray-200">
+							{$i18n.t('Models Knowledge Base')}
+						</div>
+							
+						<!-- 知识库选择 -->
+						<div class="mb-4">
+							<div class="text-sm text-gray-700 dark:text-gray-300 mb-3">选择知识库</div>
+							
+							{#if loadingKnowledgeBases}
+								<div class="flex justify-center py-8">
+									<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+									<span class="ml-2 text-sm text-gray-600">加载知识库列表...</span>
+								</div>
+							{:else if knowledgeBasesError}
+								<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+									<div class="text-sm text-red-600 mb-2">
+										{knowledgeBasesError}
+									</div>
+									<button 
+										class="text-sm text-red-700 underline hover:no-underline"
+										on:click={loadKnowledgeBases}
+									>
+										重试
+									</button>
+								</div>
+							{:else if knowledgeList.length === 0}
+								<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+									<div class="text-sm text-gray-600">
+										暂无可用的知识库
+									</div>
+								</div>
+							{:else}
+								<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+									{#each knowledgeList as knowledge (knowledge.id)}
+										{@const isSelected = selectedKnowledgeBases.includes(knowledge.id)}
+										<div 
+											class="item-card cursor-pointer {isSelected ? 'selected' : ''}"
+											on:click={() => {
+												if (isSelected) {
+													selectedKnowledgeBases = selectedKnowledgeBases.filter(id => id !== knowledge.id);
+												} else {
+													selectedKnowledgeBases = [...selectedKnowledgeBases, knowledge.id];
+												}
+											}}
+										>
+											<div class="item-card-content">
+												<div class="item-badge">
+													{#if isSelected}
+														<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+															<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+														</svg>
+													{:else}
+														KB
+													{/if}
+												</div>
+												<div class="flex-1">
+													<div class="item-card-title">{knowledge.name}</div>
+													<div class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+														{knowledge.description || '暂无描述'}
+													</div>
+												</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+
+						<!-- 参数配置 -->
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<!-- 最大 Tokens 数量 -->
+							<div>
+								<label for="knowledge-limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+									{$i18n.t('Models KnowledgeBase Limit')}
+								</label>
+								<input
+									id="knowledge-limit"
+									type="number"
+									class="form-input-sm w-full"
+									bind:value={knowledgeParams.limit}
+									placeholder={$i18n.t('Models KnowledgeBase Limit Placeholder')}
+									min="100"
+									max="32000"
+									on:input={handleLimitInput}
+								/>
+							</div>
+
+							<!-- 最低相关度 -->
+							<div>
+								<label for="knowledge-similarity" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+									{$i18n.t('Models KnowledgeBase Similarity')}
+								</label>
+								<input
+									id="knowledge-similarity"
+									type="number"
+									class="form-input-sm w-full"
+									bind:value={knowledgeParams.similarity}
+									placeholder={$i18n.t('Models KnowledgeBase Similarity Placeholder')}
+									min="0"
+									max="1"
+									step="0.1"
+									on:input={handleSimilarityInput}
+								/>
+							</div>
+						</div>
+
+						<!-- 搜索模式 -->
+						<div class="mt-4">
+							<div class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+								{$i18n.t('Models KnowledgeBase Search Mode')}
+							</div>
+							<RadioGroup.Root
+								class="flex gap-4 font-medium"
+								value={knowledgeParams.searchMode}
+								onValueChange={(value) => {
+									knowledgeParams.searchMode = value;
+								}}
+							>
+								<div class="text-gray-700 dark:text-gray-300 group flex select-none items-center transition-all">
+									<RadioGroup.Item
+										id="embedding"
+										value="embedding"
+										class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 data-[state=checked]:border-4 data-[state=checked]:border-black size-4 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
+									/>
+									<Label.Root for="embedding" class="pl-2 text-sm cursor-pointer">
+										{$i18n.t('Models KnowledgeBase Search Mode Embedding')}
+									</Label.Root>
+								</div>
+								<div class="text-gray-700 dark:text-gray-300 group flex select-none items-center transition-all">
+									<RadioGroup.Item
+										id="fullTextRecall"
+										value="fullTextRecall"
+										class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 data-[state=checked]:border-4 data-[state=checked]:border-black size-4 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
+									/>
+									<Label.Root for="fullTextRecall" class="pl-2 text-sm cursor-pointer">
+										{$i18n.t('Models KnowledgeBase Search Mode FullText')}
+									</Label.Root>
+								</div>
+								<div class="text-gray-700 dark:text-gray-300 group flex select-none items-center transition-all">
+									<RadioGroup.Item
+										id="mixedRecall"
+										value="mixedRecall"
+										class="border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500 data-[state=checked]:border-4 data-[state=checked]:border-black size-4 shrink-0 cursor-pointer rounded-full border transition-all duration-100 ease-in-out"
+									/>
+									<Label.Root for="mixedRecall" class="pl-2 text-sm cursor-pointer">
+										{$i18n.t('Models KnowledgeBase Search Mode Mixed')}
+									</Label.Root>
+								</div>
+							</RadioGroup.Root>
+						</div>
+
+						<!-- 高级选项 -->
+						<div class="mt-4 space-y-3">
+							<!-- 使用重排 -->
+							<div class="flex items-center gap-2">
+								<Checkbox.Root
+									id="usingReRank"
+									class="size-4 shrink-0 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 data-[state=checked]:bg-black data-[state=checked]:border-black"
+									checked={knowledgeParams.usingReRank}
+									onCheckedChange={(checked) => {
+										knowledgeParams.usingReRank = !!checked;
+									}}
+								>
+									<Checkbox.Indicator class="flex items-center justify-center text-white">
+										<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+											<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+										</svg>
+									</Checkbox.Indicator>
+								</Checkbox.Root>
+								<Label.Root for="usingReRank" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+									{$i18n.t('Models KnowledgeBase Content Reordering')}
+								</Label.Root>
+							</div>
+
+							<!-- 使用问题优化 -->
+							<div class="flex items-center gap-2">
+								<Checkbox.Root
+									id="datasetSearchUsingExtensionQuery"
+									class="size-4 shrink-0 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 data-[state=checked]:bg-black data-[state=checked]:border-black"
+									checked={knowledgeParams.datasetSearchUsingExtensionQuery}
+									onCheckedChange={(checked) => {
+										knowledgeParams.datasetSearchUsingExtensionQuery = !!checked;
+									}}
+								>
+									<Checkbox.Indicator class="flex items-center justify-center text-white">
+										<svg class="size-3" fill="currentColor" viewBox="0 0 20 20">
+											<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+										</svg>
+									</Checkbox.Indicator>
+								</Checkbox.Root>
+								<Label.Root for="datasetSearchUsingExtensionQuery" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+									{$i18n.t('Models KnowledgeBase Optimization')}
+								</Label.Root>
+							</div>
+						</div>
+
+						<!-- 问题优化背景描述 -->
+						{#if knowledgeParams.datasetSearchUsingExtensionQuery}
+							<div class="mt-4">
+								<label for="knowledge-background" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+									{$i18n.t('Models KnowledgeBase Background Description')}
+								</label>
+								<textarea
+									id="knowledge-background"
+									class="form-input w-full"
+									bind:value={knowledgeParams.datasetSearchExtensionBg}
+									placeholder={$i18n.t('Models KnowledgeBase Background Placeholder')}
+									rows={2}
+								/>
+							</div>
+						{/if}
+					</div>
+
+					
 				</div>
 			</div>
 
@@ -294,14 +709,13 @@
 
 	.form-input-sm {
 		width: 100%;
-		max-width: 80px;
 		border-radius: 0.375rem;
 		border: 1px solid #e2e8f0;
-		padding: 0.25rem 0.5rem;
+		padding: 0.5rem 0.75rem;
 		background-color: #ffffff;
-		font-size: 0.75rem;
+		font-size: 0.875rem;
 		color: #1a202c;
-		text-align: center;
+		text-align: left;
 		transition: all 0.2s;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 	}
@@ -310,6 +724,28 @@
 		outline: none;
 		border-color: #3b82f6;
 		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+	}
+
+	/* 默认隐藏数字输入框的增减按钮 */
+	input::-webkit-outer-spin-button,
+	input::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	input[type="number"] {
+		-moz-appearance: textfield; /* Firefox */
+	}
+
+	/* 为最低相关度输入框显示增减按钮 */
+	#knowledge-similarity::-webkit-outer-spin-button,
+	#knowledge-similarity::-webkit-inner-spin-button {
+		-webkit-appearance: auto;
+		margin: 0;
+	}
+
+	#knowledge-similarity[type="number"] {
+		-moz-appearance: auto; /* Firefox */
 	}
 
 	.form-textarea {
@@ -419,7 +855,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.15rem 0.5rem;
+		padding: 0.5rem 0.5rem;
 		border-radius: 0.75rem;
 		border: 1px solid #e5e7eb;
 		background-color: #ffffff;

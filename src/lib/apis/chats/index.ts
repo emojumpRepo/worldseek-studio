@@ -1069,7 +1069,8 @@ export const runLangflowWorkflow = async (
 	agentId: string,
 	chatId: string,
 	messages: WorkflowMessage[],
-	params: WorkflowParams = {}
+	params: WorkflowParams = {},
+	files?: any[]
 ) => {
 	const headers = {
 		'Accept': 'application/json',
@@ -1084,6 +1085,16 @@ export const runLangflowWorkflow = async (
 		messages,
 		params
 	};
+
+	// 如果有文件，添加到请求体中
+	if (files && files.length > 0) {
+		console.log('[DEBUG] 添加文件到请求体:', files);
+		body.metadata = {
+			files: files
+		};
+	} else {
+		console.log('[DEBUG] 没有文件需要添加到请求体');
+	}
 
 	// 处理流式响应的情况
 	if (params.stream === true) {

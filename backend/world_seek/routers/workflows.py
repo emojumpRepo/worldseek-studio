@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi.responses import JSONResponse
 import aiohttp
 import json
+import asyncio
 
 from world_seek.agents.agents import (
     Agents
@@ -25,6 +26,7 @@ from world_seek.utils.access_control import has_access, has_permission
 from world_seek.utils.workflow import call_langflow_api
 from world_seek.config import FASTGPT_BASE_URL, REQUEST_TIMEOUT, LANGFLOW_BASE_URL, LANGFLOW_API_BASE_URL
 from world_seek.models.user_api_configs import ApiKeys
+from world_seek.models.files import Files
 
 # 配置日志
 log = logging.getLogger(__name__)
@@ -36,6 +38,51 @@ console_handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
+
+def get_workflow_components_info(flow_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    从工作流数据中获取组件信息
+    
+    Args:
+        flow_data: 工作流数据
+        
+    Returns:
+        包含组件信息的字典
+    """
+    components_info = {
+        "chat_input_id": None,
+        "has_custom_knowledge_base": False
+    }
+    
+    try:
+        # 检查工作流数据结构
+        if 'data' in flow_data and 'nodes' in flow_data['data']:
+            nodes = flow_data['data']['nodes']
+        elif 'nodes' in flow_data:
+            nodes = flow_data['nodes']
+        else:
+            log.warning(f"工作流数据中未找到nodes字段: {flow_data.keys()}")
+            return components_info
+        
+        # 遍历节点查找组件
+        for node in nodes:
+            node_type = node.get('data', {}).get('type')
+            
+            # 查找ChatInput组件
+            if node_type == 'ChatInput':
+                components_info["chat_input_id"] = node.get('id')
+                log.debug(f"找到ChatInput组件: {node.get('id')}")
+            
+            # 查找CustomKnowledgeBase组件
+            elif node_type == 'CustomKnowledgeBase':
+                components_info["has_custom_knowledge_base"] = True
+                log.debug(f"找到CustomKnowledgeBase组件: {node.get('id')}")
+                
+    except Exception as e:
+        log.error(f"解析工作流组件信息异常: {e}")
+    
+    log.info(f"工作流组件信息: chat_input_id={components_info['chat_input_id']}, has_custom_knowledge_base={components_info['has_custom_knowledge_base']}")
+    return components_info
 
 async def sync_workflows_with_database(flows: List[Dict[str, Any]], user):
     """
@@ -75,10 +122,14 @@ async def sync_workflows_with_database(flows: List[Dict[str, Any]], user):
                 
             # 准备工作流数据
             try:  
+                # 获取工作流组件信息
+                components_info = get_workflow_components_info(flow)
+                
                 workflow_data = WorkflowForm(
                     name=flow.get("name", "未命名工作流"),
                     description=flow.get("description", ""),
                     api_path=flow_id,
+                    params=components_info  # 将组件信息存储到params字段
                 )
 
                 log.info(f"创建WorkflowForm: {workflow_data}")
@@ -93,7 +144,8 @@ async def sync_workflows_with_database(flows: List[Dict[str, Any]], user):
                 # 检查是否需要更新
                 needs_update = (
                     existing_workflow.name != workflow_data.name or
-                    existing_workflow.description != workflow_data.description
+                    existing_workflow.description != workflow_data.description or
+                    existing_workflow.params != workflow_data.params
                 )
                 
                 if needs_update:
@@ -536,6 +588,40 @@ async def run_workflow(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
     
+    # 构造新的input_value格式
+    def construct_input_value(user_message: str, agent_params: dict = None, workflow_params: dict = None) -> str:
+        """
+        构造新的input_value格式
+        
+        Args:
+            user_message: 用户的最新一条消息内容
+            agent_params: 智能体的参数
+            workflow_params: 工作流的参数
+            
+        Returns:
+            JSON字符串格式的input_value
+        """
+        input_data = {"user_value": user_message}
+        
+        # 检查工作流中是否存在CustomKnowledgeBase组件
+        has_custom_knowledge_base = False
+        if workflow_params and isinstance(workflow_params, dict):
+            has_custom_knowledge_base = workflow_params.get("has_custom_knowledge_base", False)
+        
+        # 只有当工作流包含CustomKnowledgeBase组件且智能体有参数时，才添加db_params
+        if has_custom_knowledge_base and agent_params:
+            input_data["db_params"] = agent_params
+            log.debug(f"工作流包含CustomKnowledgeBase组件，添加db_params: {agent_params}")
+        else:
+            if not has_custom_knowledge_base:
+                log.debug("工作流不包含CustomKnowledgeBase组件，不添加db_params")
+            elif not agent_params:
+                log.debug("智能体参数为空，不添加db_params")
+            
+        result = json.dumps(input_data, ensure_ascii=False)
+        log.debug(f"构造的input_value: {result}")
+        return result
+    
     # 获取聊天的session_id
     session_id = Chats.get_session_id_by_chat_id(chat_id)
 
@@ -554,7 +640,7 @@ async def run_workflow(
         # 使用配置的base_url，如果没有配置则使用环境变量
         api_base_url = langflow_base_url or LANGFLOW_BASE_URL
         
-        # 准备API URL
+        # 准备API URL - 使用标准的run接口
         api_url = api_base_url + "/run/" + workflow.api_path
         if not api_url:
             log.error(f"API路径未配置: ID={workflow_id}")
@@ -568,15 +654,98 @@ async def run_workflow(
         # 使用配置的App Token
         app_token = langflow_api_key
         
-        # 准备请求数据
-        langflow_data = {
-            "input_value": latest_message,
-            "input_type": "chat",
-            "output_type": "chat",
-            "session_id": session_id,
-        }
+        # 处理文件信息
+        metadata = form_data.get("metadata", {})
+        files = metadata.get("files", [])
+        file_paths = []
+        chat_input_id = None
 
-        log.info(f"请求数据: {langflow_data}")
+        if files:
+            # 1. 上传文件到Langflow，获取file_path
+            for i, file_info in enumerate(files):
+                if file_info.get("type") == "file" and file_info.get("id"):
+                    file_id = file_info.get("id")
+                    file_obj = Files.get_file_by_id(file_id)
+                    if not file_obj:
+                        continue
+                    try:
+                        upload_url = f"{api_base_url}/files/upload/{workflow.api_path}"
+                        async with aiohttp.ClientSession() as session:
+                            headers = {"x-api-key": app_token}
+                            with open(file_obj.path, "rb") as f:
+                                data = aiohttp.FormData()
+                                data.add_field("file", f, filename=file_obj.filename)
+                                async with session.post(upload_url, data=data, headers=headers) as response:
+                                    if response.status == 201:
+                                        resp_json = await response.json()
+                                        file_path = resp_json.get("file_path")
+                                        if file_path:
+                                            file_paths.append(file_path)
+                    except Exception as e:
+                        log.error(f"文件上传异常: {e}")
+
+            # 2. 获取ChatInput组件ID（优先使用数据库中存储的ID）
+            chat_input_id = None
+            if workflow.params and isinstance(workflow.params, dict):
+                chat_input_id = workflow.params.get("chat_input_id")
+                log.info(f"从数据库获取ChatInput ID: {chat_input_id}")
+            
+            # 如果数据库中没有存储ChatInput ID，则重新获取
+            if not chat_input_id:
+                try:
+                    log.info("数据库中未找到ChatInput ID，重新获取...")
+                    flow_detail_url = f"{api_base_url}/flows/{workflow.api_path}"
+                    async with aiohttp.ClientSession() as session:
+                        headers = {"x-api-key": app_token, "accept": "application/json"}
+                        async with session.get(flow_detail_url, headers=headers) as response:
+                            if response.status == 200:
+                                flow_data = await response.json()
+                                if 'data' in flow_data and 'nodes' in flow_data['data']:
+                                    for node in flow_data['data']['nodes']:
+                                        if node.get('data', {}).get('type') == 'ChatInput':
+                                            chat_input_id = node.get('id')
+                                            log.info(f"重新获取的ChatInput ID: {chat_input_id}")
+                                            break
+                except Exception as e:
+                    log.warning(f"获取ChatInput组件ID异常: {e}")
+
+            # 3. 构造 tweaks 格式
+            # 构造新的input_value
+            formatted_input_value = construct_input_value(latest_message, agent.params, workflow.params)
+            
+            if chat_input_id:
+                langflow_data = {
+                    "input_type": "chat",
+                    "output_type": "chat",
+                    "session_id": session_id,
+                    "tweaks": {
+                        chat_input_id: {
+                            "input_value": formatted_input_value,
+                            "files": file_paths
+                        }
+                    }
+                }
+            else:
+                # fallback: 没有ChatInput组件ID时，降级为原始格式
+                langflow_data = {
+                    "input_value": formatted_input_value,
+                    "input_type": "chat",
+                    "output_type": "chat",
+                    "session_id": session_id,
+                    "files": file_paths
+                }
+        else:
+            # 无文件，原始格式
+            formatted_input_value = construct_input_value(latest_message, agent.params, workflow.params)
+            langflow_data = {
+                "input_value": formatted_input_value,
+                "input_type": "chat",
+                "output_type": "chat",
+                "session_id": session_id,
+            }
+
+        workflow_has_kb = workflow.params and isinstance(workflow.params, dict) and workflow.params.get("has_custom_knowledge_base", False)
+        log.info(f"[DEBUG] 发送到Langflow的数据概要: input_value长度={len(formatted_input_value)}, session_id={session_id}, files数量={len(file_paths)}, agent_params={'有' if agent.params else '无'}, 工作流包含知识库组件={workflow_has_kb}")
         
         # 调用Langflow API
         try:

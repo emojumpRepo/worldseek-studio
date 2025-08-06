@@ -46,6 +46,8 @@ class Agent(Base):
         The human-readable display name of the model.
     """
 
+    params = Column(JSON, nullable=True)
+
     description = Column(Text)
     """
         The description of the agent.
@@ -78,6 +80,8 @@ class AgentModel(BaseModel):
     id: Optional[int] = None
     base_app_id: Optional[int] = None
     user_id: Optional[str] = None
+
+    params: Optional[dict] = None
     
     name: str
     description: str
@@ -110,6 +114,7 @@ class AgentForm(BaseModel):
     id: Optional[Union[int, str]] = None
     base_app_id: Optional[Union[int, str]] = None
     name: str
+    params: Optional[dict] = None
     description: str
     access_control: Optional[dict] = None
     is_deleted: bool = False

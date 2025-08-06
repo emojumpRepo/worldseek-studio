@@ -32,7 +32,7 @@ class ApiKeysConfigResponse(BaseModel):
         """从配置创建响应对象，并对API key进行脱敏处理"""
         data = config.model_dump()
         
-        # 对API key进行脱敏处理
+        # 对Langflow API key进行脱敏处理
         if data.get("langflow_api_key"):
             key = data["langflow_api_key"]
             if len(key) > 8:
@@ -40,9 +40,19 @@ class ApiKeysConfigResponse(BaseModel):
             else:
                 data["langflow_api_key_masked"] = "*" * len(key)
         
+        # 对FastGPT API key进行脱敏处理
+        if data.get("fastgpt_api_key"):
+            key = data["fastgpt_api_key"]
+            if len(key) > 8:
+                data["fastgpt_api_key_masked"] = key[:4] + "*" * (len(key) - 8) + key[-4:]
+            else:
+                data["fastgpt_api_key_masked"] = "*" * len(key)
+        
         return cls(
             langflow_api_key_masked=data.get("langflow_api_key_masked"),
             langflow_base_url=data.get("langflow_base_url"),
+            fastgpt_api_key_masked=data.get("fastgpt_api_key_masked"),
+            fastgpt_base_url=data.get("fastgpt_base_url"),
         )
 
 ####################
