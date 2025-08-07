@@ -322,6 +322,77 @@ class ModelsTable:
             print(f"get_agents_by_user_id方法发生异常: {e}")
             return []
 
+    def get_workspace_agents_by_user_id(self, user_id: str) -> list[AgentUserWorkflowResponse]:
+        """
+        获取工作空间智能体列表 - 仅返回当前用户创建的智能体
+        不考虑访问权限，只要是当前用户创建的智能体都返回
+        """
+        try:
+            agents = []
+            with get_db() as db:
+                # 直接查询当前用户创建的智能体
+                user_agents = db.query(Agent).filter_by(
+                    user_id=user_id, 
+                    is_deleted=False
+                ).all()
+                print(f"[DEBUG] 查询用户 {user_id} 的智能体，找到 {len(user_agents)} 个")
+                
+                for agent in user_agents:
+                    try:
+                        print(f"[DEBUG] 处理智能体: {agent.id}, 名称: {agent.name}")
+                        # 获取用户信息
+                        user = None
+                        if agent.user_id:
+                            try:
+                                user = Users.get_user_by_id(agent.user_id)
+                                print(f"[DEBUG] 获取到用户信息: {user.id if user else None}")
+                            except Exception as e:
+                                print(f"获取用户信息失败: {e}")
+                        
+                        # 获取工作流信息
+                        workflow_app = None
+                        if agent.base_app_id:
+                            try:
+                                workflow_app = Workflows.get_workflow_by_id(agent.base_app_id)
+                                print(f"[DEBUG] 获取到工作流信息: {workflow_app.id if workflow_app else None}")
+                            except Exception as e:
+                                print(f"获取workflow_app失败: {e}")
+                        
+                        # 构建响应数据
+                        agent_dict = agent.__dict__.copy()
+                        # 移除SQLAlchemy的内部属性
+                        agent_dict.pop('_sa_instance_state', None)
+                        
+                        user_dict = None
+                        if user:
+                            user_dict = user.__dict__.copy()
+                            user_dict.pop('_sa_instance_state', None)
+                        
+                        workflow_app_dict = None
+                        if workflow_app:
+                            workflow_app_dict = workflow_app.__dict__.copy()
+                            workflow_app_dict.pop('_sa_instance_state', None)
+                        
+                        response_data = {
+                            **agent_dict,
+                            "user": user_dict,
+                            "workflow_app": workflow_app_dict,
+                        }
+                        agent_response = AgentUserWorkflowResponse.model_validate(response_data)
+                        agents.append(agent_response)
+                        print(f"[DEBUG] 成功添加智能体: {agent.name}")
+                    except Exception as e:
+                        print(f"处理单个workspace agent时出错: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                print(f"[DEBUG] 最终返回 {len(agents)} 个智能体")
+                return agents
+        except Exception as e:
+            print(f"get_workspace_agents_by_user_id方法发生异常: {e}")
+            return []
+
     def get_agent_by_id(self, id: str) -> Optional[AgentModel]:
         try:
             with get_db() as db:

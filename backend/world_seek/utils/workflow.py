@@ -455,7 +455,23 @@ async def langflow_stream_generator(
                             log.warning("[DEBUG] 没有收到任何数据块")
                             error_data = {"error": {"detail": "服务器未返回任何数据，请检查工作流配置"}}
                             yield f"data: {json.dumps(error_data)}\n\n"
-                            
+                        # --- 这里插入统一输出langflow-complete事件 ---
+                        if stats.accumulated_content:
+                            log.info(f"[DEBUG] 最终累积内容长度: {len(stats.accumulated_content)} 字符")
+                            log.info(f"[DEBUG] 最终累积内容前500字符: {stats.accumulated_content[:500]}{'...' if len(stats.accumulated_content) > 500 else ''}")
+                            complete_response = {
+                                "id": "langflow-complete",
+                                "complete": True,
+                                "content": stats.accumulated_content,
+                                "session_id": stats.session_id
+                            }
+                            yield f"data: {json.dumps(complete_response)}\n\n"
+                        else:
+                            log.warning("[DEBUG] 没有累积到任何内容")
+                            error_data = {"error": {"detail": "智能体回答内容为空，请稍后重试"}}
+                            yield f"data: {json.dumps(error_data)}\n\n"
+                        yield "data: [DONE]\n\n"
+                        
                     except Exception as stream_error:
                         log.error(f"流式数据读取错误: {stream_error}")
                         error_data = {"error": {"detail": "数据流读取异常，请检查网络连接或稍后重试"}}
@@ -475,7 +491,6 @@ async def langflow_stream_generator(
                         log.warning("[DEBUG] 没有累积到任何内容")
                         error_data = {"error": {"detail": "智能体回答内容为空，请稍后重试"}}
                         yield f"data: {json.dumps(error_data)}\n\n"
-                    
                     yield "data: [DONE]\n\n"
                     
                     stream_duration = time.time() - stats.start_time

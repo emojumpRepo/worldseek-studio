@@ -10,7 +10,7 @@
 	import { WEBUI_NAME, config, mobile, models as _models, settings, user } from '$lib/stores';
 	import {
 		deleteModelById,
-		getModels as getWorkspaceModels,
+		getWorkspaceModels,
 		updateModelById,
 		createNewModel,
 		getWorkflowApps

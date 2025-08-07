@@ -116,6 +116,16 @@
 		(model) => $models.find((m) => m.id === model)?.info?.meta?.capabilities?.vision ?? true
 	);
 
+	// Langflow支持的文件类型
+	const TEXT_FILE_TYPES = [
+		"txt", "md", "mdx", "csv", "json", "yaml", "yml", "xml", "html", "htm", "pdf", "docx", "py", "sh", "sql", "js", "ts", "tsx"
+	];
+	const IMG_FILE_TYPES = ["jpg", "jpeg", "png", "bmp", "image"];
+	function isLangflowSupported(file) {
+		const ext = file.name.split('.').pop().toLowerCase();
+		return TEXT_FILE_TYPES.includes(ext) || IMG_FILE_TYPES.includes(ext);
+	}
+
 	const scrollToBottom = () => {
 		const element = document.getElementById('messages-container');
 		element.scrollTo({
@@ -162,6 +172,8 @@
 	};
 
 	const uploadFileHandler = async (file, fullContext: boolean = false) => {
+		console.log('[DEBUG] uploadFileHandler 开始处理文件:', file.name);
+		
 		if ($_user?.role !== 'admin' && !($_user?.permissions?.chat?.file_upload ?? true)) {
 			toast.error($i18n.t('You do not have permission to upload files.'));
 			return null;
@@ -187,7 +199,9 @@
 			return null;
 		}
 
+		console.log('[DEBUG] 添加文件到数组，当前files长度:', files.length);
 		files = [...files, fileItem];
+		console.log('[DEBUG] 添加后files长度:', files.length);
 
 		try {
 			// During the file upload, file content is automatically extracted.
@@ -212,75 +226,52 @@
 					uploadedFile?.meta?.collection_name || uploadedFile?.collection_name;
 				fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
 
+				console.log('[DEBUG] 文件上传完成，更新files数组，当前长度:', files.length);
 				files = files;
+				console.log('[DEBUG] 更新后files长度:', files.length);
 			} else {
+				console.log('[DEBUG] 文件上传失败，从数组中移除');
 				files = files.filter((item) => item?.itemId !== tempItemId);
 			}
 		} catch (e) {
+			console.error('[DEBUG] 文件上传异常:', e);
 			toast.error(`${e}`);
 			files = files.filter((item) => item?.itemId !== tempItemId);
 		}
+		
+		console.log('[DEBUG] uploadFileHandler 处理完成，最终files长度:', files.length);
 	};
 
 	const inputFilesHandler = async (inputFiles) => {
-		console.log('Input files handler called with:', inputFiles);
-		inputFiles.forEach((file) => {
-			console.log('Processing file:', {
-				name: file.name,
-				type: file.type,
-				size: file.size,
-				extension: file.name.split('.').at(-1)
-			});
-
+		console.log('[DEBUG] inputFilesHandler 开始处理文件，文件数量:', inputFiles.length);
+		console.log('[DEBUG] 文件列表:', inputFiles.map(f => f.name));
+		
+		// 使用 for...of 循环来正确处理异步操作
+		for (const file of inputFiles) {
+			console.log('[DEBUG] 处理文件:', file.name);
+			
+			if (!isLangflowSupported(file)) {
+				toast.error(`不支持的文件类型: ${file.name}`);
+				continue;
+			}
 			if (
 				($config?.file?.max_size ?? null) !== null &&
 				file.size > ($config?.file?.max_size ?? 0) * 1024 * 1024
 			) {
-				console.log('File exceeds max size limit:', {
-					fileSize: file.size,
-					maxSize: ($config?.file?.max_size ?? 0) * 1024 * 1024
-				});
 				toast.error(
 					$i18n.t(`File size should not exceed {{maxSize}} MB.`, {
 						maxSize: $config?.file?.max_size
 					})
 				);
-				return;
+				continue;
 			}
-
-			if (
-				['image/gif', 'image/webp', 'image/jpeg', 'image/png', 'image/avif'].includes(file['type'])
-			) {
-				if (visionCapableModels.length === 0) {
-					toast.error($i18n.t('Selected model(s) do not support image inputs'));
-					return;
-				}
-				let reader = new FileReader();
-				reader.onload = async (event) => {
-					let imageUrl = event.target.result;
-
-					if ($settings?.imageCompression ?? false) {
-						const width = $settings?.imageCompressionSize?.width ?? null;
-						const height = $settings?.imageCompressionSize?.height ?? null;
-
-						if (width || height) {
-							imageUrl = await compressImage(imageUrl, width, height);
-						}
-					}
-
-					files = [
-						...files,
-						{
-							type: 'image',
-							url: `${imageUrl}`
-						}
-					];
-				};
-				reader.readAsDataURL(file);
-			} else {
-				uploadFileHandler(file);
-			}
-		});
+			
+			// 等待每个文件上传完成
+			await uploadFileHandler(file);
+		}
+		
+		console.log('[DEBUG] inputFilesHandler 处理完成，当前files数组长度:', files.length);
+		console.log('[DEBUG] 当前files数组:', files.map(f => ({ name: f.name, id: f.id, status: f.status })));
 	};
 
 	const handleKeyDown = (event: KeyboardEvent) => {

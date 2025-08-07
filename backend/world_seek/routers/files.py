@@ -129,7 +129,8 @@ def upload_file(
                         ProcessFileForm(file_id=id, content=result.get("text", "")),
                         user=user,
                     )
-                elif file.content_type not in ["image/png", "image/jpeg", "image/gif"]:
+                else:
+                    # 统一文件处理逻辑：处理所有文件类型，包括图片
                     process_file(request, ProcessFileForm(file_id=id), user=user)
 
                 file_item = Files.get_file_by_id(id=id)

@@ -1519,23 +1519,33 @@
 			return;
 		}
 
-		let files = JSON.parse(JSON.stringify(chatFiles));
-		console.log('[DEBUG] chatFiles:', chatFiles);
+		// 只传递当前用户消息的文件，而不是整个聊天历史的所有文件
+		let files = [];
 		console.log('[DEBUG] userMessage?.files:', userMessage?.files);
 		console.log('[DEBUG] responseMessage?.files:', responseMessage?.files);
 		
-		files.push(
-			...(userMessage?.files ?? []).filter((item) =>
-				['doc', 'file', 'collection'].includes(item.type)
-			),
-			...(responseMessage?.files ?? []).filter((item) => ['web_search_results'].includes(item.type))
-		);
+		// 只添加当前用户消息的文件
+		if (userMessage?.files && userMessage.files.length > 0) {
+			files.push(
+				...userMessage.files.filter((item) =>
+					['doc', 'file', 'collection'].includes(item.type)
+				)
+			);
+		}
+		
+		// 添加响应消息中的web_search_results（如果有的话）
+		if (responseMessage?.files && responseMessage.files.length > 0) {
+			files.push(
+				...responseMessage.files.filter((item) => ['web_search_results'].includes(item.type))
+			);
+		}
+		
 		// Remove duplicates
 		files = files.filter(
 			(item, index, array) =>
 				array.findIndex((i) => JSON.stringify(i) === JSON.stringify(item)) === index
 		);
-		console.log('[DEBUG] 最终传递给runLangflowWorkflow的files:', files);
+		console.log('[DEBUG] 最终传递给runLangflowWorkflow的files (仅当前消息):', files);
 
 		scrollToBottom();
 		

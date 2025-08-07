@@ -39,6 +39,14 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
+TEXT_FILE_TYPES = [
+    "txt", "md", "mdx", "csv", "json", "yaml", "yml", "xml", "html", "htm", "pdf", "docx", "py", "sh", "sql", "js", "ts", "tsx"
+]
+IMG_FILE_TYPES = ["jpg", "jpeg", "png", "bmp", "image"]
+def is_langflow_supported(filename):
+    ext = filename.split('.')[-1].lower()
+    return ext in TEXT_FILE_TYPES or ext in IMG_FILE_TYPES
+
 def get_workflow_components_info(flow_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     从工作流数据中获取组件信息
@@ -58,25 +66,66 @@ def get_workflow_components_info(flow_data: Dict[str, Any]) -> Dict[str, Any]:
         # 检查工作流数据结构
         if 'data' in flow_data and 'nodes' in flow_data['data']:
             nodes = flow_data['data']['nodes']
+            edges = flow_data['data'].get('edges', [])
         elif 'nodes' in flow_data:
             nodes = flow_data['nodes']
+            edges = flow_data.get('edges', [])
         else:
             log.warning(f"工作流数据中未找到nodes字段: {flow_data.keys()}")
             return components_info
         
-        # 遍历节点查找组件
+        # 查找组件ID
+        chat_input_id = None
+        language_model_ids = []
+        
         for node in nodes:
             node_type = node.get('data', {}).get('type')
+            node_id = node.get('id')
             
             # 查找ChatInput组件
             if node_type == 'ChatInput':
-                components_info["chat_input_id"] = node.get('id')
-                log.debug(f"找到ChatInput组件: {node.get('id')}")
+                chat_input_id = node_id
+                components_info["chat_input_id"] = node_id
+                log.debug(f"找到ChatInput组件: {node_id}")
             
-            # 查找CustomKnowledgeBase组件
-            elif node_type == 'CustomKnowledgeBase':
-                components_info["has_custom_knowledge_base"] = True
-                log.debug(f"找到CustomKnowledgeBase组件: {node.get('id')}")
+            # 查找LanguageModelComponent组件
+            elif node_type == 'LanguageModelComponent':
+                language_model_ids.append(node_id)
+                log.debug(f"找到LanguageModelComponent组件: {node_id}")
+        
+        # 检查ChatInput的kb_search_result输出是否连接到LanguageModelComponent
+        if chat_input_id and language_model_ids:
+            log.debug(f"开始检查知识库连接，ChatInput ID: {chat_input_id}, LanguageModel IDs: {language_model_ids}")
+            log.debug(f"总共有 {len(edges)} 条连线")
+            
+            for i, edge in enumerate(edges):
+                source = edge.get('source')
+                target = edge.get('target')
+                
+                # 检查edge的data字段中的详细连接信息
+                edge_data = edge.get('data', {})
+                source_handle_data = edge_data.get('sourceHandle', {})
+                target_handle_data = edge_data.get('targetHandle', {})
+                
+                log.debug(f"连线 {i+1}: {source} -> {target}")
+                log.debug(f"  源句柄: dataType={source_handle_data.get('dataType')}, name={source_handle_data.get('name')}")
+                log.debug(f"  目标句柄: fieldName={target_handle_data.get('fieldName')}")
+                
+                # 检查是否是从ChatInput的kb_search_result输出连接到LanguageModelComponent
+                is_from_chat_input = (source == chat_input_id and 
+                                    source_handle_data.get('dataType') == 'ChatInput' and
+                                    source_handle_data.get('name') == 'kb_search_result')
+                
+                is_to_language_model = target in language_model_ids
+                
+                if is_from_chat_input and is_to_language_model:
+                    components_info["has_custom_knowledge_base"] = True
+                    log.info(f"✓ 发现知识库连接: ChatInput({chat_input_id}).kb_search_result -> LanguageModelComponent({target})")
+                    log.debug(f"连接详情: source_handle={source_handle_data}, target_handle={target_handle_data}")
+                    break
+        
+        if chat_input_id and not components_info["has_custom_knowledge_base"]:
+            log.debug(f"ChatInput组件 {chat_input_id} 的kb_search_result未连接到LanguageModelComponent")
                 
     except Exception as e:
         log.error(f"解析工作流组件信息异常: {e}")
@@ -657,13 +706,29 @@ async def run_workflow(
         # 处理文件信息
         metadata = form_data.get("metadata", {})
         files = metadata.get("files", [])
+        log.info(f"[DEBUG] 本次请求的文件数量: {len(files)}")
+        if files:
+            log.info(f"[DEBUG] 文件列表: {[f.get('name', 'unknown') for f in files]}")
         file_paths = []
         chat_input_id = None
 
-        if files:
+        # 只处理Langflow支持的文件类型
+        langflow_files = []
+        for file_info in files:
+            filename = file_info.get("name", "")
+            if not is_langflow_supported(filename):
+                continue
+            ext = filename.split('.')[-1].lower()
+            if ext in IMG_FILE_TYPES:
+                file_info["type"] = "image"
+            elif ext in TEXT_FILE_TYPES:
+                file_info["type"] = "file"
+            langflow_files.append(file_info)
+
+        if langflow_files:
             # 1. 上传文件到Langflow，获取file_path
-            for i, file_info in enumerate(files):
-                if file_info.get("type") == "file" and file_info.get("id"):
+            for i, file_info in enumerate(langflow_files):
+                if file_info.get("type") in ("file", "image") and file_info.get("id"):
                     file_id = file_info.get("id")
                     file_obj = Files.get_file_by_id(file_id)
                     if not file_obj:

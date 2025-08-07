@@ -999,12 +999,12 @@ DEFAULT_USER_ROLE = PersistentConfig(
 )
 
 USER_PERMISSIONS_WORKSPACE_MODELS_ACCESS = (
-    os.environ.get("USER_PERMISSIONS_WORKSPACE_MODELS_ACCESS", "False").lower()
+    os.environ.get("USER_PERMISSIONS_WORKSPACE_MODELS_ACCESS", "True").lower()
     == "true"
 )
 
 USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS = (
-    os.environ.get("USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS", "False").lower()
+    os.environ.get("USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS", "True").lower()
     == "true"
 )
 

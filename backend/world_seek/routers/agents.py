@@ -33,6 +33,21 @@ async def get_agents(id: Optional[str] = None, user=Depends(get_verified_user)):
 
 
 ###########################
+# GetWorkspaceAgents
+###########################
+
+
+@router.get("/workspace", response_model=list[AgentUserWorkflowResponse])
+async def get_workspace_agents(user=Depends(get_verified_user)):
+    """
+    获取工作空间可展示的智能体列表
+    - 仅返回当前用户创建的智能体
+    - 适用于所有用户角色，确保数据隔离
+    """
+    return Agents.get_workspace_agents_by_user_id(user.id)
+
+
+###########################
 # GetBaseAgents
 ###########################
 

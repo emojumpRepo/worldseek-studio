@@ -193,14 +193,9 @@ class Loader:
         file_ext = filename.split(".")[-1].lower()
 
         if self.engine == "tika" and self.kwargs.get("TIKA_SERVER_URL"):
-            if self._is_text_file(file_ext, file_content_type):
-                loader = TextLoader(file_path, autodetect_encoding=True)
-            else:
-                loader = TikaLoader(
-                    url=self.kwargs.get("TIKA_SERVER_URL"),
-                    file_path=file_path,
-                    mime_type=file_content_type,
-                )
+            # 禁用Tika，直接返回空内容
+            from langchain.schema import Document
+            return [Document(page_content="", metadata={"warning": "Tika已禁用，未提取内容"})]
         elif self.engine == "docling" and self.kwargs.get("DOCLING_SERVER_URL"):
             if self._is_text_file(file_ext, file_content_type):
                 loader = TextLoader(file_path, autodetect_encoding=True)
@@ -234,8 +229,7 @@ class Loader:
         elif (
             self.engine == "mistral_ocr"
             and self.kwargs.get("MISTRAL_OCR_API_KEY") != ""
-            and file_ext
-            in ["pdf"]  # Mistral OCR currently only supports PDF and images
+            and (file_ext in ["pdf"] or file_content_type in ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"])
         ):
             loader = MistralLoader(
                 api_key=self.kwargs.get("MISTRAL_OCR_API_KEY"), file_path=file_path
@@ -275,6 +269,36 @@ class Loader:
                 loader = UnstructuredPowerPointLoader(file_path)
             elif file_ext == "msg":
                 loader = OutlookMessageLoader(file_path)
+            elif file_content_type in ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]:
+                # 图片文件：尝试使用可用的OCR引擎
+                if self.kwargs.get("TIKA_SERVER_URL"):
+                    loader = TikaLoader(
+                        url=self.kwargs.get("TIKA_SERVER_URL"),
+                        file_path=file_path,
+                        mime_type=file_content_type,
+                    )
+                elif self.kwargs.get("DOCLING_SERVER_URL"):
+                    loader = DoclingLoader(
+                        url=self.kwargs.get("DOCLING_SERVER_URL"),
+                        file_path=file_path,
+                        mime_type=file_content_type,
+                    )
+                else:
+                    # 如果没有OCR引擎可用，创建一个包含基本信息的文档
+                    from langchain.schema import Document
+                    class ImagePlaceholderLoader:
+                        def __init__(self, file_path, content_type, filename):
+                            self.file_path = file_path
+                            self.content_type = content_type
+                            self.filename = filename
+                        
+                        def load(self):
+                            return [Document(
+                                page_content=f"图片文件：{self.filename}（需要配置OCR引擎才能提取文本内容）",
+                                metadata={"content_type": self.content_type, "source": self.filename}
+                            )]
+                    
+                    loader = ImagePlaceholderLoader(file_path, file_content_type, filename)
             elif self._is_text_file(file_ext, file_content_type):
                 loader = TextLoader(file_path, autodetect_encoding=True)
             else:
