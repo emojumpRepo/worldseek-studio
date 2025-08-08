@@ -1070,7 +1070,8 @@ export const runLangflowWorkflow = async (
 	chatId: string,
 	messages: WorkflowMessage[],
 	params: WorkflowParams = {},
-	files?: any[]
+    files?: any[],
+    signal?: AbortSignal
 ) => {
 	const headers = {
 		'Accept': 'application/json',
@@ -1097,12 +1098,13 @@ export const runLangflowWorkflow = async (
 	}
 
 	// 处理流式响应的情况
-	if (params.stream === true) {
+    if (params.stream === true) {
 		try {
 			const response = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
 				method: 'POST',
 				headers,
-				body: JSON.stringify(body)
+                body: JSON.stringify(body),
+                ...(signal ? { signal } : {})
 			});
 
 			if (!response.ok) {
@@ -1123,7 +1125,8 @@ export const runLangflowWorkflow = async (
 		const response = await fetch(`${WEBUI_API_BASE_URL}/workflows/run`, {
 			method: 'POST',
 			headers,
-			body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            ...(signal ? { signal } : {})
 		});
 
 		if (!response.ok) {

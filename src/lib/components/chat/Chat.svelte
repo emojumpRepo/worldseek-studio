@@ -135,6 +135,9 @@
 	};
 
 	let taskIds = null;
+  // 流控制
+  let currentWorkflowController: AbortController | null = null;
+  let streamAbortedByUser = false;
 
 	// Chat Input
 	let prompt = '';
@@ -792,6 +795,23 @@
 		const chatInput = document.getElementById('chat-input');
 		setTimeout(() => chatInput?.focus(), 0);
 	};
+
+  // 生成聊天标题：取首条用户消息的前10个字符（去空白），为空则回退“新对话”
+  const generateChatTitleFromHistory = (h: { messages: Record<string, any>; currentId: string | null }) => {
+    if (!h || !h.messages) return $i18n.t('New Chat');
+    // 找到第一条用户消息（parentId 为 null 且 role==='user'），否则尝试当前ID
+    let firstUserMessage = Object.values(h.messages).find(
+      (m: any) => m && m.role === 'user' && (m.parentId === null || m.parentId === undefined)
+    );
+    if (!firstUserMessage && h.currentId && h.messages[h.currentId]?.role === 'user') {
+      firstUserMessage = h.messages[h.currentId];
+    }
+    const raw = (firstUserMessage?.content ?? '').toString();
+    const cleaned = raw.replace(/\s+/g, ' ').trim();
+    if (!cleaned) return $i18n.t('New Chat');
+    const title = cleaned.slice(0, 10);
+    return title;
+  };
 
 	const loadChat = async () => {
 		chatId.set(chatIdProp);
@@ -1563,8 +1583,13 @@
 			})
 		);
 
-		const useStream = $settings?.langflowStreamEnabled ?? true;
+    const useStream = $settings?.langflowStreamEnabled ?? true;
 		try {
+      // 为本次请求创建可中断控制器
+      const controller = new AbortController();
+      currentWorkflowController = controller;
+      streamAbortedByUser = false;
+
 			const res = await runLangflowWorkflow(
 				localStorage.token,
 				model.base_app_id,
@@ -1577,13 +1602,14 @@
 				{
 					stream: useStream,
 				},
-				files // 传递文件信息
+        files, // 传递文件信息
+        controller.signal
 			);
 
 			if (res) {
 				if (useStream && res.body) {
 					// 处理流式响应
-					await handleLangflowStream(res, responseMessage);
+          await handleLangflowStream(res, responseMessage);
 				} else if (res.error) {
 					// 处理错误响应
 					await handleLangflowError(res.error, responseMessage);
@@ -1607,11 +1633,13 @@
 				};
 			}
 		} catch (error) {
-			console.error('Error in sendPromptSocket:', error);
-			toast.error(`${error}`);
-			responseMessage.error = {
-				content: String(error)
-			};
+      console.error('Error in sendPromptSocket:', error);
+      if (!streamAbortedByUser) {
+        toast.error(`${error}`);
+        responseMessage.error = {
+          content: String(error)
+        };
+      }
 		} finally {
 			// 确保消息状态被正确设置
 			responseMessage.done = true;
@@ -1629,6 +1657,9 @@
 			
 			await tick();
 			if (autoScroll) scrollToBottom();
+      // 清理控制器
+      currentWorkflowController = null;
+      streamAbortedByUser = false;
 		}
 	};
 
@@ -1699,7 +1730,15 @@
 	};
 
 	const stopResponse = async () => {
-		if (taskIds) {
+    // 优先中止前端流
+    if (currentWorkflowController) {
+      try {
+        streamAbortedByUser = true;
+        currentWorkflowController.abort();
+      } catch {}
+    }
+
+    if (taskIds) {
 			for (const taskId of taskIds) {
 				const res = await stopTask(localStorage.token, taskId).catch((error) => {
 					toast.error(`${error}`);
@@ -1850,9 +1889,11 @@
 		let _chatId = $chatId;
 
 		if (!$temporaryChatEnabled) {
+      // 生成标题
+      const autoTitle = generateChatTitleFromHistory(history) || $i18n.t('New Chat');
 			chat = await createNewChat(localStorage.token, {
 				id: _chatId,
-				title: $i18n.t('New Chat'),
+        title: autoTitle,
 				models: selectedModels,
 				system: $settings.system ?? undefined,
 				params: params,
@@ -1864,6 +1905,8 @@
 
 			_chatId = chat.id;
 			await chatId.set(_chatId);
+      // 立即更新本地标题展示
+      chatTitle.set(autoTitle);
 
 			await chats.set(await getChatList(localStorage.token, $currentChatPage));
 			currentChatPage.set(1);
@@ -1894,7 +1937,7 @@
 		}
 	};
 
-	const handleLangflowStream = async (res, responseMessage) => {
+  const handleLangflowStream = async (res, responseMessage) => {
 		if (!res || !res.body) {
 			console.error('Invalid response from Langflow streaming API');
 			return;
@@ -1920,7 +1963,12 @@
 			}
 			
 			console.log('开始处理流式响应');
-			while (true) {
+      while (true) {
+        // 用户手动停止，则尝试取消读取并退出循环
+        if (streamAbortedByUser) {
+          try { await reader.cancel(); } catch {}
+          break;
+        }
 				const { done, value } = await reader.read();
 				if (done) {
 					console.log('流式响应结束');
@@ -2073,10 +2121,12 @@
 			if (autoScroll) scrollToBottom();
 			
 		} catch (error) {
-			console.error('处理流式响应时发生错误:', error);
-			responseMessage.error = {
-				content: `Stream error: ${error.message}`
-			};
+      console.error('处理流式响应时发生错误:', error);
+      if (!streamAbortedByUser) {
+        responseMessage.error = {
+          content: `Stream error: ${error.message}`
+        };
+      }
 			responseMessage.done = true;
 			responseMessage.loading = false;
 			if (history && history.messages) {
